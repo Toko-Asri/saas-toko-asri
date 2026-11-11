@@ -1,0 +1,46 @@
+== UJI BERURUTAN ==
+UJI-1  : I-1 BERHASIL (saldo diubah satu kali)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1
+UJI-2  : I-2 SUDAH DIPROSES (saldo tidak diubah lagi)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1
+UJI-3  : I-3 DITOLAK: KONFLIK IDEMPOTENCY (saldo tidak diubah)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1
+UJI-4  : I-3 DITOLAK: KONFLIK IDEMPOTENCY (saldo tidak diubah)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1
+UJI-8  : I-1 DITOLAK ERP: produk nonaktif (klaim kunci dibatalkan, kunci belum terpakai)
+   stock movement GR-202611-0008: 0 | kunci tersimpan: 0
+UJI-9  : I-1 BERHASIL (saldo diubah satu kali)
+UJI-10 : I-2 SUDAH DIPROSES (saldo tidak diubah lagi)
+   stock movement GR-202611-0008: 1
+
+== UJI-14: dua permintaan BERSAMAAN, kunci sama, isi sama ==
+   permintaan 2: I-2 SUDAH DIPROSES (saldo tidak diubah lagi)
+   permintaan 1: I-1 BERHASIL (saldo diubah satu kali)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1
+
+== UJI-15: dua permintaan BERSAMAAN, kunci sama, isi berbeda (20 vs 25) ==
+   permintaan 1 (20): I-1 BERHASIL (saldo diubah satu kali)
+   permintaan 2 (25): I-3 DITOLAK: KONFLIK IDEMPOTENCY (saldo tidak diubah)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1
+
+== UJI-16: BERSAMAAN, kunci sama; permintaan 1 ditolak bisnis, permintaan 2 valid ==
+   permintaan 1 (keluar 15, saldo 10): I-1 DITOLAK ERP: saldo tidak cukup (klaim kunci dibatalkan, kunci belum terpakai)
+   permintaan 2 (keluar 10): I-1 BERHASIL (saldo diubah satu kali)
+   saldo A NUGGET: 0 | stock movement kunci TR-202611-0003-KIRIM: 1
+
+== UJI-17: dua kunci BERBEDA bersamaan menarik batch yang sama (saldo 10, masing-masing 8) ==
+   TR-0005-KIRIM: I-1 BERHASIL (saldo diubah satu kali)
+   TR-0004-KIRIM: I-1 DITOLAK ERP: saldo tidak cukup (klaim kunci dibatalkan, kunci belum terpakai)
+   saldo A: 2 | total stock movement: 1
+
+== UJI-18: permintaan 2 menyerah menunggu (lock_timeout 1 dtk) saat permintaan 1 masih diproses ==
+   permintaan 2: ERROR:  canceling statement due to lock timeout
+   permintaan 1: I-1 BERHASIL (saldo diubah satu kali)
+   permintaan 2 dikirim ulang setelah itu: I-2 SUDAH DIPROSES (saldo tidak diubah lagi)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1
+
+== UJI-19: proses 1 terputus di tengah (koneksi diputus sebelum commit), lalu dikirim ulang ==
+   permintaan 1: koneksi terputus, hasil tidak diterima klien
+   saldo A NUGGET: 0 | stock movement kunci GR-202611-0007: 0
+   kirim ulang isi sama: I-1 BERHASIL (saldo diubah satu kali)
+   saldo A NUGGET: 20 | stock movement kunci GR-202611-0007: 1

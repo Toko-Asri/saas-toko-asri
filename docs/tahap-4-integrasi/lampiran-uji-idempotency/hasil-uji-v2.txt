@@ -1,0 +1,131 @@
+=== Lingkungan ===
+PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+Tanggal uji: 2026-11-10 21:32 WIB
+
+=== TC-01 Pengajuan baru berhasil ===
+   [PASS] kode: BERHASIL
+   [PASS] saldo 10+5: 15
+   [PASS] movement K-TC01: 1
+
+=== TC-02 Kunci sama, isi sama ===
+   [PASS] kode ulang: SUDAH_DIPROSES
+   [PASS] saldo tetap: 15
+   [PASS] movement tetap: 1
+   [PASS] hasil sebelumnya dikembalikan (movement_id sama): 2
+
+=== TC-03 Kunci sama, isi berbeda ===
+   [PASS] jumlah 7: KONFLIK
+   [PASS] batch lain: KONFLIK
+   [PASS] jenis lain: KONFLIK
+   [PASS] saldo tetap: 15
+   [PASS] movement tetap: 1
+
+=== TC-04 Produk nonaktif ===
+   [PASS] kode: DITOLAK
+   [PASS] kunci tidak tersimpan: 0
+   [PASS] tidak ada movement: 0
+   [PASS] I-4: diperbaiki lalu diajukan ulang kunci sama: BERHASIL
+   [PASS] movement setelah I-4: 1
+
+=== TC-05 Stok tidak mencukupi ===
+   [PASS] keluar 11 dari 10: DITOLAK
+   [PASS] saldo tetap: 10
+   [PASS] kunci tidak tersimpan: 0
+   [PASS] batch tidak ada: DITOLAK
+   [PASS] baris saldo tidak dibuat untuk batch tidak ada: 0
+
+=== TC-06 Jumlah nol atau negatif ===
+   [PASS] jumlah 0: DITOLAK
+   [PASS] jumlah -3: DITOLAK
+   [PASS] jumlah NULL: DITOLAK
+   [PASS] saldo tetap: 10
+   [PASS] tidak ada kunci tersimpan: 0
+
+=== TC-07 Jenis kejadian tidak valid ===
+   [PASS] jenis 'masuk' (huruf kecil): DITOLAK
+   [PASS] jenis 'TRANSFER': DITOLAK
+   [PASS] jenis NULL: DITOLAK
+   [PASS] kunci NULL: DITOLAK
+   [PASS] saldo tetap: 10
+
+=== TC-08 Dua sesi bersamaan, kunci sama, isi sama ===
+   [PASS] sesi B menunggu lock selama A belum commit: Lock
+   [PASS] saldo terlihat dari luar sebelum commit A: 10
+   [PASS] sesi A: BERHASIL
+   [PASS] sesi B setelah A commit: SUDAH_DIPROSES
+   [PASS] saldo 10+5 sekali: 15
+   [PASS] movement K-TC08: 1
+
+=== TC-09 Dua sesi bersamaan, kunci sama, isi berbeda (5 vs 7) ===
+   [PASS] sesi B menunggu lock: Lock
+   [PASS] sesi A: BERHASIL
+   [PASS] sesi B: KONFLIK
+   [PASS] saldo 10+5 (isi A): 15
+   [PASS] movement K-TC09: 1
+
+=== TC-10 Sesi A rollback, sesi B mencoba kunci sama ===
+   [PASS] sesi B menunggu lock: Lock
+   [PASS] sesi A (sebelum rollback): BERHASIL
+   [PASS] sesi B setelah A rollback: BERHASIL
+   [PASS] saldo 10+5 sekali: 15
+   [PASS] movement K-TC10: 1
+   -- TC-10b: A ditolak bisnis tetapi transaksinya masih terbuka --
+   [PASS] sesi B tidak menunggu (klaim A sudah dibatalkan): Client
+   [PASS] sesi A: DITOLAK
+   [PASS] sesi B: BERHASIL
+   [PASS] movement K-TC10b: 1
+
+=== TC-11 Dua kunci berbeda mengubah batch sama (saldo 10, masing-masing keluar 8) ===
+   [PASS] sesi B menunggu kunci baris saldo: Lock
+   [PASS] sesi A: BERHASIL
+   [PASS] sesi B membaca saldo terbaru (2): DITOLAK
+   [PASS] saldo: 2
+   [PASS] kunci B tidak tersimpan: 0
+   -- TC-11b: A rollback, B harus berhasil --
+   [PASS] sesi B menunggu: Lock
+   [PASS] sesi B: BERHASIL
+   [PASS] saldo: 2
+
+=== TC-12 Koneksi terputus / hasil commit tidak diketahui ===
+   -- TC-12a: koneksi sesi A diputus SEBELUM commit --
+   [PASS] status kunci setelah putus: BELUM_ADA_YANG_BERHASIL
+   [PASS] saldo tidak berubah: 10
+   [PASS] kirim ulang isi sama: BERHASIL
+   [PASS] movement: 1
+   -- TC-12b: COMMIT terjadi tetapi klien tidak membaca jawabannya --
+   [PASS] status kunci: BERHASIL
+   [PASS] sidik tersimpan = sidik isi klien: 80e19fccb130b9a933104828bd5f1de6833abebd010c1e780230df587086dde8
+   [PASS] kirim ulang isi sama: SUDAH_DIPROSES
+   [PASS] saldo 10+5 sekali: 15
+   [PASS] movement: 1
+
+=== TC-13 (regresi) Isolasi REPEATABLE READ ditolak tegas ===
+   [PASS] pesan: wajib dijalankan pada READ COMMITTED
+   [PASS] saldo tetap: 10
+
+=== TC-14 (regresi) DateStyle berbeda tidak membuat konflik palsu ===
+   [PASS] kirim ulang dengan DateStyle SQL,DMY: SUDAH_DIPROSES
+
+=== TC-15 (regresi) Karakter pemisah tidak membuat sidik bertabrakan ===
+   [PASS] produk 'A' batch 'B|C' dengan kunci sama: KONFLIK
+
+=== TC-16 (regresi) Batas waktu tunggu, lalu kirim ulang ===
+   [PASS] sesi kedua dengan lock_timeout 1s: lock timeout
+   [PASS] kirim ulang setelah A commit: SUDAH_DIPROSES
+   [PASS] movement: 1
+
+=== Verifikasi akhir (data TC-16) ===
+== V1. Saldo batch setelah pengujian ==
+A|NUGGET|B2311A|2027-05-30|15
+== V2. Jumlah stock movement per kunci ==
+K-TC16|1|5
+SALDO-AWAL-1|1|10
+== V3. PELANGGARAN: kunci Berhasil tanpa stock movement (kunci tertinggal), harus 0 baris ==
+== V4. PELANGGARAN: lebih dari satu movement per baris kunci (perubahan ganda), harus 0 baris ==
+== V5. PELANGGARAN: saldo negatif, harus 0 baris ==
+== V6. PELANGGARAN: saldo tidak sama dengan jumlah semua movement batch itu, harus 0 baris ==
+== V7. PELANGGARAN: sidik tersimpan tidak cocok dengan isi tersimpan, harus 0 baris ==
+== V8. PELANGGARAN: isi movement tidak sesuai isi kunci, harus 0 baris ==
+   [PASS] jumlah pelanggaran V3+V4+V5+V6+V7: 0
+
+=== RINGKASAN: 77 PASS, 0 FAIL ===
