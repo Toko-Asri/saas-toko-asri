@@ -166,5 +166,72 @@ select tst.as_user('00000000-0000-0000-0000-0000000000e4');
 select tst.assert(checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'qris',12000,gen_random_uuid()) is not null, 'pemilik boleh checkout');
 reset role;
 
+
+-- ===== Task 3: adjust_stock dan laporan =====
+insert into products(id,sku,nama,satuan,supplier_id,harga_beli,harga_jual,min_stock,reorder_qty) values
+  ('bbbbbbbb-0000-0000-0000-000000000001','PE','Produk E','pcs','55555555-0000-0000-0000-000000000002',6000,10000,0,10);
+insert into batches(id,product_id,location_id,kode_batch,qty,tgl_kedaluwarsa,harga_beli) values
+  ('bbbbbbbb-0000-0000-0000-00000000000a','bbbbbbbb-0000-0000-0000-000000000001','66666666-0000-0000-0000-000000000001','EA',10,(now() at time zone 'Asia/Jakarta')::date+30,6000);
+
+-- dua penjualan, lalu diberi tanggal mundur (S2 pada 00:30 WIB: UTC masih hari sebelumnya)
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000e1');
+select checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',20000,'c0000000-0000-0000-0000-000000000001');
+select checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',10000,'c0000000-0000-0000-0000-000000000002');
+reset role;
+update sales set created_at = (((now() at time zone 'Asia/Jakarta')::date - 3)::text || ' 12:00:00+07')::timestamptz where idempotency_key='c0000000-0000-0000-0000-000000000001';
+update sales set created_at = (((now() at time zone 'Asia/Jakarta')::date - 1)::text || ' 00:30:00+07')::timestamptz where idempotency_key='c0000000-0000-0000-0000-000000000002';
+update products set min_stock = 5 where id='bbbbbbbb-0000-0000-0000-000000000001';
+delete from purchase_suggestions where product_id='bbbbbbbb-0000-0000-0000-000000000001';
+
+-- adjust_stock
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000e3');
+select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', 5, 'rusak', 'pecah');
+do $$ begin
+  perform tst.assert((select qty from batches where id='bbbbbbbb-0000-0000-0000-00000000000a') = 5, 'stok batch menjadi 5');
+  perform tst.assert((select qty_sebelum from stock_adjustments where batch_id='bbbbbbbb-0000-0000-0000-00000000000a') = 7, 'qty_sebelum 7 (10 - 3 terjual)');
+  perform tst.assert((select nilai from stock_adjustments where batch_id='bbbbbbbb-0000-0000-0000-00000000000a') = 12000, 'nilai kerugian 2 x 6000');
+end $$;
+select tst.expect_error($q$select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', -1, 'rusak')$q$, 'qty negatif');
+select tst.expect_error($q$select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', 5, 'rusak')$q$, 'tanpa perubahan');
+select tst.expect_error($q$select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', 9, 'rusak')$q$, 'naik dengan alasan rusak');
+select tst.expect_error($q$select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', 4, 'lainnya')$q$, 'alasan tidak valid');
+select tst.expect_error($q$select adjust_stock('bbbbbbbb-0000-0000-0000-0000000000ff', 1, 'rusak')$q$, 'batch tidak ada');
+select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', 6, 'koreksi');
+do $$ begin
+  perform tst.assert((select nilai from stock_adjustments where alasan='koreksi') = -6000, 'koreksi naik: nilai negatif');
+end $$;
+select tst.as_user('00000000-0000-0000-0000-0000000000e1');
+select tst.expect_error($q$select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', 1, 'rusak')$q$, 'kasir tidak boleh menyesuaikan');
+-- penurunan ke <= min_stock memicu saran (pemilik melakukan)
+select tst.as_user('00000000-0000-0000-0000-0000000000e4');
+select adjust_stock('bbbbbbbb-0000-0000-0000-00000000000a', 4, 'kedaluwarsa');
+reset role;
+do $$ begin
+  perform tst.assert((select count(*) from purchase_suggestions where product_id='bbbbbbbb-0000-0000-0000-000000000001' and status='terbuka') = 1, 'penyesuaian memicu saran pembelian');
+end $$;
+
+-- laporan_keuangan (pemilik)
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000e4');
+do $$ declare h date := (now() at time zone 'Asia/Jakarta')::date; begin
+  perform tst.assert((select count(*) from laporan_keuangan(h-3, h)) = 4, 'satu baris per hari termasuk hari kosong');
+  perform tst.assert((select jumlah_transaksi||'/'||penjualan||'/'||hpp||'/'||laba_kotor from laporan_keuangan(h-3,h) where tanggal = h-3) = '1/20000/12000/8000', 'hari h-3');
+  perform tst.assert((select jumlah_transaksi||'/'||penjualan from laporan_keuangan(h-3,h) where tanggal = h-2) = '0/0', 'hari kosong bernilai nol');
+  perform tst.assert((select jumlah_transaksi||'/'||penjualan||'/'||hpp||'/'||laba_kotor from laporan_keuangan(h-3,h) where tanggal = h-1) = '1/10000/6000/4000', 'penjualan 00:30 WIB masuk tanggal WIB, bukan UTC');
+  perform tst.assert((select kerugian_stok from laporan_keuangan(h-3,h) where tanggal = h) = 12000 + 12000, 'kerugian hari ini: rusak 12000 + kedaluwarsa 12000 (koreksi naik tidak mengurangi)');
+  perform tst.assert((select qty_terjual||'/'||penjualan||'/'||hpp||'/'||laba_kotor from laporan_produk(h-3,h) where product_id='bbbbbbbb-0000-0000-0000-000000000001') = '3/30000/18000/12000', 'laporan produk E');
+  perform tst.assert((select laba_kotor from laporan_produk(h-3,h) limit 1) = (select max(laba_kotor) from laporan_produk(h-3,h)), 'urut laba terbesar dulu');
+  perform tst.expect_error(format($f$select * from laporan_keuangan(%L,%L)$f$, h, h-1), 'sampai < dari');
+  perform tst.expect_error(format($f$select * from laporan_keuangan(%L,%L)$f$, h-366, h), 'rentang > 366 hari');
+end $$;
+select tst.as_user('00000000-0000-0000-0000-0000000000e3');
+select tst.expect_error($q$select * from laporan_keuangan(current_date, current_date)$q$, 'staf gudang tidak boleh laporan');
+select tst.expect_error($q$select * from laporan_produk(current_date, current_date)$q$, 'staf gudang tidak boleh laporan produk');
+select tst.as_user('00000000-0000-0000-0000-0000000000e1');
+select tst.expect_error($q$select * from laporan_keuangan(current_date, current_date)$q$, 'kasir tidak boleh laporan');
+reset role;
+
 rollback;
 \echo 'SEMUA UJI ERP LULUS'
