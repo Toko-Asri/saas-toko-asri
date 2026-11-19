@@ -1,4 +1,5 @@
 -- Uji skema SCM. Jalankan: psql -v ON_ERROR_STOP=1 -d asri_test -f supabase/tests/scm_test.sql
+-- Catatan: asumsikan DB bersih (skema baru, tanpa seed); lihat supabase/tests/run.sh.
 -- Semua perubahan di-rollback di akhir.
 begin;
 create schema tst;
