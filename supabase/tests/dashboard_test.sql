@@ -161,6 +161,8 @@ end $$;
 -- (g) aktivitas terbaru
 do $$ declare a int := 0; begin
   perform tst.assert((select count(distinct jenis) from aktivitas_terbaru(50)) = 5, 'kelima jenis aktivitas muncul');
+  -- saran yang tertutup otomatis tanpa PO (selesai, po_id null) hanya derau: tidak ditampilkan; yang masih terbuka tampil
+  perform tst.assert((select count(*) from aktivitas_terbaru(50) where jenis = 'saran_pembelian') = 2, 'hanya saran terbuka (DC, DD) yang tampil; saran tertutup otomatis tidak');
   perform tst.assert((select count(*) from aktivitas_terbaru(3)) = 3, 'limit 3');
   perform tst.assert((select count(*) from aktivitas_terbaru(0)) = 1, 'limit 0 dibatasi 1');
   perform tst.assert((select array_agg(waktu) = array_agg(waktu order by waktu desc) from aktivitas_terbaru(50)), 'urut terbaru lebih dulu');

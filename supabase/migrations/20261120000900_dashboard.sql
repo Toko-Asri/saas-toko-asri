@@ -116,6 +116,7 @@ begin
     select g.created_at, 'saran_pembelian', 'Saran pembelian: ' || p.nama,
            'Disarankan pesan ' || g.qty_disarankan || ' · ' || g.status, '/gudang/saran'
     from purchase_suggestions g join products p on p.id = g.product_id
+    where g.status <> 'selesai' or g.po_id is not null   -- saran tertutup otomatis tanpa PO hanyalah derau
     union all
     select o.created_at, 'po_dibuat', 'PO ke ' || sp.nama,
            o.status || ' · ' || (select count(*) from purchase_order_items i where i.po_id = o.id) || ' item', '/gudang/pembelian/' || o.id
