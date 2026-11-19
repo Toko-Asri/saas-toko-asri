@@ -199,5 +199,29 @@ select tst.as_user('00000000-0000-0000-0000-0000000000c3');
 select tst.expect_error($q$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',12500,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a')$q$, 'staf gudang checkout');
 reset role;
 
+
+-- ===== Task 3: riwayat belanja dan produk favorit =====
+select tst.as_user('00000000-0000-0000-0000-0000000000c1');
+set local role authenticated;
+do $$ declare a uuid := 'd3000000-0000-0000-0000-00000000000a'; begin
+  perform tst.assert((select count(*) from sales where customer_id = a) = 3, 'kasir A langsung hanya melihat 3 penjualan miliknya');
+  perform tst.assert((select count(*) from riwayat_pelanggan(a)) = 4, 'riwayat_pelanggan menampilkan semua 4 transaksi (termasuk milik kasir B)');
+  perform tst.assert((select nomor from riwayat_pelanggan(a) limit 1) = (select max(nomor) from riwayat_pelanggan(a)), 'urut terbaru lebih dulu');
+  perform tst.assert((select sum(total) from riwayat_pelanggan(a)) = 25000 + 475000 + 1500000 + 12500, 'total riwayat benar');
+  perform tst.assert((select sum(poin) from riwayat_pelanggan(a)) = 2 + 47 + 150 + 1, 'poin per transaksi benar');
+  perform tst.assert((select count(*) from riwayat_pelanggan(a, 0)) = 1, 'limit 0 dibatasi menjadi 1');
+  perform tst.assert((select count(*) from riwayat_pelanggan(a, 1000)) = 4, 'limit 1000 dibatasi 200 (hanya 4 baris tersedia)');
+  perform tst.assert((select jumlah_item from riwayat_pelanggan(a) where total = 12500) = 1, 'jumlah_item per transaksi');
+  perform tst.assert((select count(*) from riwayat_pelanggan('d3000000-0000-0000-0000-00000000000b')) = 0, 'pelanggan tanpa transaksi: nol baris');
+  perform tst.assert((select count(*) from riwayat_pelanggan(gen_random_uuid())) = 0, 'pelanggan tidak ada: nol baris, tanpa error');
+  perform tst.assert((select nama||'/'||qty from produk_favorit_pelanggan(a) limit 1) = 'Produk CRM/161', 'produk favorit A: qty dijumlah lintas transaksi dan batch');
+  perform tst.assert((select string_agg(nama||':'||qty, ',' order by qty desc) from produk_favorit_pelanggan('d3000000-0000-0000-0000-00000000000c')) = 'Produk CRM:4,Produk 9999:2', 'favorit C urut qty menurun');
+  perform tst.assert((select count(*) from produk_favorit_pelanggan('d3000000-0000-0000-0000-00000000000c', 1)) = 1, 'limit favorit');
+end $$;
+select tst.as_user('00000000-0000-0000-0000-0000000000c3');
+select tst.expect_error($q$select * from riwayat_pelanggan('d3000000-0000-0000-0000-00000000000a')$q$, 'staf gudang riwayat');
+select tst.expect_error($q$select * from produk_favorit_pelanggan('d3000000-0000-0000-0000-00000000000a')$q$, 'staf gudang favorit');
+reset role;
+
 rollback;
 \echo 'SEMUA UJI CRM LULUS'
