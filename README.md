@@ -17,7 +17,7 @@ Logika bisnis yang kritis (penerimaan barang, saran pembelian, pembatalan PO) be
 
 ## Menjalankan aplikasi
 
-> Gunakan proyek Supabase **khusus demo**, bukan produksi. `supabase/seed.sql` menghapus data SCM yang ada sebelum mengisi data contoh.
+> Gunakan proyek Supabase **khusus demo**, bukan produksi. `supabase/seed.sql` **menghapus data SCM dan seluruh data transaksi yang ada (penjualan, penyesuaian stok)** sebelum mengisi data contoh. Jangan dijalankan ulang jika Anda sudah memasukkan data sendiri yang ingin dipertahankan.
 
 ### 1. Membuat proyek di supabase.com
 
@@ -35,8 +35,8 @@ Pilih salah satu cara.
 **Cara A: SQL Editor (paling mudah)**
 
 1. Di dashboard buka **SQL Editor → New query**.
-2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (`20261119000100_scm_schema.sql`, `20261120000100_saran_diabaikan.sql`, `20261120000200_erp_schema.sql`, `20261120000300_erp_checkout.sql`, `20261120000400_erp_adjust_report.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan sebagian, cukup jalankan file yang belum dijalankan, dari yang paling awal.
-3. Buka query baru, salin isi `supabase/seed.sql`, **Run**. Ini mengisi 3 pemasok, 4 lokasi simpan, 17 produk, 20 batch (ada yang hampir/sudah kedaluwarsa), 3 saran pembelian, dan 2 PO contoh.
+2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (`20261119000100_scm_schema.sql`, `20261120000100_saran_diabaikan.sql`, `20261120000200_erp_schema.sql`, `20261120000300_erp_checkout.sql`, `20261120000400_erp_adjust_report.sql`, `20261120000500_erp_hardening.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan sebagian, cukup jalankan file yang belum dijalankan, dari yang paling awal.
+3. Buka query baru, salin isi `supabase/seed.sql`, **Run**. Ini mengisi 3 pemasok, 4 lokasi simpan, 17 produk, 20 batch (ada yang hampir/sudah kedaluwarsa), 3 saran pembelian, 2 PO contoh, **70 transaksi penjualan 30 hari terakhir**, dan 5 riwayat penyesuaian stok.
 
 **Cara B: Supabase CLI**
 

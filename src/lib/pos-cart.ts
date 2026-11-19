@@ -25,3 +25,14 @@ export function kembalian(totalBayar: number, bayar: number): number | null {
 export function keItemCheckout(k: BarisKeranjang[]): { product_id: string; qty: number }[] {
   return k.map((b) => ({ product_id: b.productId, qty: b.qty }))
 }
+
+// Menyelaraskan keranjang dengan data produk terbaru dari server (harga/stok layak berubah).
+// Baris yang produknya hilang atau stoknya habis dikeluarkan; qty dibatasi stok layak baru.
+export function sinkronKeranjang(k: BarisKeranjang[], terbaru: Omit<BarisKeranjang, 'qty'>[]): BarisKeranjang[] {
+  const peta = new Map(terbaru.map((p) => [p.productId, p]))
+  return k.flatMap((b) => {
+    const p = peta.get(b.productId)
+    if (!p || p.stokLayak <= 0) return []
+    return [{ ...b, nama: p.nama, harga: p.harga, stokLayak: p.stokLayak, qty: Math.min(b.qty, p.stokLayak) }]
+  })
+}

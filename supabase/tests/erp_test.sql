@@ -233,5 +233,36 @@ select tst.as_user('00000000-0000-0000-0000-0000000000e1');
 select tst.expect_error($q$select * from laporan_keuangan(current_date, current_date)$q$, 'kasir tidak boleh laporan');
 reset role;
 
+
+-- ===== Perbaikan hasil tinjauan akhir =====
+-- (I-1) keranjang NULL ditolak
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000e1');
+select tst.expect_error($q$select checkout(null,'tunai',1000,gen_random_uuid())$q$, 'keranjang NULL');
+
+-- (I-2) kunci idempotensi terikat pada isi dan kasir
+do $$ declare k uuid := gen_random_uuid(); s1 uuid; s2 uuid; begin
+  s1 := checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',10000,k);
+  s2 := checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',10000.00,k);
+  perform tst.assert(s1 = s2, 'isi sama (bayar 10000 vs 10000.00) mengembalikan transaksi yang sama');
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',20000,%L)$f$, k), 'kunci sama, isi berbeda');
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',20000,%L)$f$, k), 'kunci sama, bayar berbeda');
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":1}]'::jsonb,'qris',10000,%L)$f$, k), 'kunci sama, metode berbeda');
+  perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000e2',true);
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"bbbbbbbb-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',10000,%L)$f$, k), 'kunci dipakai kasir lain');
+end $$;
+
+-- (I-3) tulis langsung ke batches ditolak untuk semua peran; membaca tetap boleh
+select tst.as_user('00000000-0000-0000-0000-0000000000e3');
+select tst.expect_error($q$update batches set qty = 999$q$, 'update batches langsung (staf gudang)');
+select tst.expect_error($q$update batches set harga_beli = 0$q$, 'ubah biaya batch langsung');
+select tst.expect_error($q$update batches set tgl_kedaluwarsa = tgl_kedaluwarsa + 400$q$, 'geser kedaluwarsa langsung');
+select tst.expect_error($q$delete from batches$q$, 'delete batches langsung');
+select tst.expect_error($q$insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values ('bbbbbbbb-0000-0000-0000-000000000001','66666666-0000-0000-0000-000000000001','LIAR',5,current_date+30)$q$, 'insert batches langsung');
+select tst.as_user('00000000-0000-0000-0000-0000000000e4');
+select tst.expect_error($q$update batches set qty = 999$q$, 'update batches langsung (pemilik)');
+select tst.assert((select count(*) from batches) > 0, 'batches tetap bisa dibaca');
+reset role;
+
 rollback;
 \echo 'SEMUA UJI ERP LULUS'

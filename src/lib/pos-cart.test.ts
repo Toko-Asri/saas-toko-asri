@@ -56,3 +56,27 @@ describe('total, kembalian, keItemCheckout', () => {
     expect(keItemCheckout(k)).toEqual([{ product_id: 'n', qty: 2 }, { product_id: 's', qty: 1 }])
   })
 })
+
+import { sinkronKeranjang } from './pos-cart'
+
+describe('sinkronKeranjang (setelah data server diperbarui)', () => {
+  const k: BarisKeranjang[] = [
+    { productId: 'n', nama: 'Nugget', harga: 36000, qty: 3, stokLayak: 5 },
+    { productId: 's', nama: 'Sosis', harga: 41000, qty: 1, stokLayak: 5 },
+  ]
+  test('harga dan stok layak mengikuti data terbaru', () => {
+    const r = sinkronKeranjang(k, [{ productId: 'n', nama: 'Nugget', harga: 38000, stokLayak: 9 }, { productId: 's', nama: 'Sosis', harga: 41000, stokLayak: 5 }])
+    expect(r.find((b) => b.productId === 'n')).toMatchObject({ harga: 38000, stokLayak: 9, qty: 3 })
+  })
+  test('qty dibatasi stok layak yang baru', () => {
+    const r = sinkronKeranjang(k, [{ productId: 'n', nama: 'Nugget', harga: 36000, stokLayak: 2 }, { productId: 's', nama: 'Sosis', harga: 41000, stokLayak: 5 }])
+    expect(r.find((b) => b.productId === 'n')?.qty).toBe(2)
+  })
+  test('produk yang habis atau hilang dari data dikeluarkan', () => {
+    const r = sinkronKeranjang(k, [{ productId: 'n', nama: 'Nugget', harga: 36000, stokLayak: 0 }])
+    expect(r).toEqual([])
+  })
+  test('tanpa perubahan mengembalikan isi yang setara', () => {
+    expect(sinkronKeranjang(k, [{ productId: 'n', nama: 'Nugget', harga: 36000, stokLayak: 5 }, { productId: 's', nama: 'Sosis', harga: 41000, stokLayak: 5 }])).toEqual(k)
+  })
+})

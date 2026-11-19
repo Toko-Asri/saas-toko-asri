@@ -1,8 +1,8 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatRupiah } from '@/lib/format'
-import { kembalian, keItemCheckout, tambah, total, ubahQty, type BarisKeranjang } from '@/lib/pos-cart'
+import { kembalian, keItemCheckout, sinkronKeranjang, tambah, total, ubahQty, type BarisKeranjang } from '@/lib/pos-cart'
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui'
 import { bayar } from './actions'
 
@@ -12,14 +12,22 @@ type Metode = 'tunai' | 'qris' | 'transfer'
 export function Pos({ produk }: { produk: ProdukPos[] }) {
   const router = useRouter()
   const [cari, setCari] = useState('')
-  const [keranjang, setKeranjang] = useState<BarisKeranjang[]>([])
+  const [mentah, setKeranjang] = useState<BarisKeranjang[]>([])
   const [metode, setMetode] = useState<Metode>('tunai')
   const [bayarStr, setBayarStr] = useState('')
   const [memproses, setMemproses] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
-  // Kunci idempoten: dipakai ulang untuk kirim ulang isi yang sama (klik ganda / respons hilang),
-  // diganti bila isi keranjang, metode, atau bayar berubah.
-  const kunci = useRef<{ sidik: string; id: string } | null>(null)
+  // Kunci idempoten: dibuat saat pertama kali bayar dan DIPERTAHANKAN sampai transaksi berhasil atau keranjang
+  // dikosongkan. Kirim ulang (klik ganda / respons hilang) memakai kunci yang sama sehingga tidak menjadi
+  // transaksi ganda; server menolak kunci yang sama bila isinya berbeda.
+  const kunci = useRef<string | null>(null)
+
+  // Keranjang turunan: selalu selaras dengan data server terbaru (setelah router.refresh() harga/stok bisa berubah).
+  const keranjang = useMemo(
+    () => sinkronKeranjang(mentah, produk.map((p) => ({ productId: p.id, nama: p.nama, harga: p.harga, stokLayak: p.stokLayak }))),
+    [mentah, produk],
+  )
+  useEffect(() => { if (keranjang.length === 0) kunci.current = null }, [keranjang.length])
 
   const totalBayar = total(keranjang)
   const jumlahBayar = metode === 'tunai' ? Number(bayarStr || 0) : totalBayar
@@ -31,9 +39,15 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
   const qtyDiKeranjang = (id: string) => keranjang.find((b) => b.productId === id)?.qty ?? 0
 
   function kunciUntuk(): string {
-    const sidik = JSON.stringify([keItemCheckout(keranjang), metode, jumlahBayar])
-    if (!kunci.current || kunci.current.sidik !== sidik) kunci.current = { sidik, id: crypto.randomUUID() }
-    return kunci.current.id
+    if (!kunci.current) kunci.current = crypto.randomUUID()
+    return kunci.current
+  }
+
+  function kosongkan() {
+    setKeranjang([])
+    setBayarStr('')
+    setGalat(null)
+    kunci.current = null
   }
 
   async function prosesBayar() {
@@ -42,11 +56,17 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
     setGalat(null)
     try {
       const hasil = await bayar({ items: keItemCheckout(keranjang), metode, bayar: jumlahBayar, key: kunciUntuk() })
-      if (hasil.error) { setGalat(hasil.error); return }
+      if (hasil.error) {
+        setGalat(hasil.error.includes('Kunci transaksi')
+          ? 'Transaksi dengan keranjang ini mungkin sudah tercatat. Periksa Riwayat Penjualan; jika belum ada, tekan "Kosongkan keranjang" lalu input ulang.'
+          : hasil.error)
+        router.refresh() // harga/stok mungkin berubah: muat ulang data produk, keranjang diselaraskan otomatis
+        return
+      }
       kunci.current = null
       router.push(`/kasir/riwayat/${hasil.saleId}`)
     } catch {
-      setGalat('Koneksi bermasalah. Periksa riwayat penjualan sebelum mencoba lagi; mencoba lagi dengan isi yang sama aman dari transaksi ganda.')
+      setGalat('Koneksi bermasalah. Mencoba lagi dengan isi yang sama aman dari transaksi ganda; jika ragu, periksa Riwayat Penjualan dulu.')
     } finally {
       setMemproses(false)
     }
@@ -75,7 +95,10 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
       </section>
 
       <aside className="space-y-3 rounded-lg border bg-white p-4 lg:col-span-2">
-        <h2 className="text-lg font-semibold">Keranjang</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Keranjang</h2>
+          {keranjang.length > 0 && <button type="button" onClick={kosongkan} className={btnGhostCls}>Kosongkan keranjang</button>}
+        </div>
         {keranjang.length === 0 && <p className="text-sm text-slate-500">Belum ada produk.</p>}
         <ul className="divide-y">
           {keranjang.map((b) => (
