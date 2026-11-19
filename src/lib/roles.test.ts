@@ -36,3 +36,40 @@ describe('menuFor', () => {
       for (const m of menuFor(p)) expect(canAccess(p, m.href)).toBe(true)
   })
 })
+
+describe('rute ERP (Tahap 2)', () => {
+  test('kasir boleh /kasir dan /kasir/riwayat', () => {
+    expect(canAccess('kasir', '/kasir')).toBe(true)
+    expect(canAccess('kasir', '/kasir/riwayat')).toBe(true)
+  })
+  test('kasir tidak boleh /laporan dan /gudang', () => {
+    expect(canAccess('kasir', '/laporan')).toBe(false)
+    expect(canAccess('kasir', '/gudang/produk')).toBe(false)
+  })
+  test('staf gudang tidak boleh /laporan maupun /kasir, tetapi boleh penyesuaian stok', () => {
+    expect(canAccess('staf_gudang', '/laporan')).toBe(false)
+    expect(canAccess('staf_gudang', '/kasir')).toBe(false)
+    expect(canAccess('staf_gudang', '/gudang/penyesuaian')).toBe(true)
+  })
+  test('pemilik boleh /laporan dan /kasir', () => {
+    expect(canAccess('pemilik', '/laporan')).toBe(true)
+    expect(canAccess('pemilik', '/kasir')).toBe(true)
+  })
+  test('pencocokan per segmen: /kasirx dan /laporanx ditolak untuk kasir', () => {
+    expect(canAccess('kasir', '/kasirx')).toBe(false)
+    expect(canAccess('kasir', '/laporanx')).toBe(false)
+  })
+  test('menu kasir: Beranda, Kasir, Riwayat Penjualan', () => {
+    expect(menuFor('kasir').map((m) => m.href)).toEqual(['/', '/kasir', '/kasir/riwayat'])
+  })
+  test('menu staf gudang memuat Penyesuaian Stok tanpa Laporan/Kasir', () => {
+    const h = menuFor('staf_gudang').map((m) => m.href)
+    expect(h).toContain('/gudang/penyesuaian')
+    expect(h).not.toContain('/laporan')
+    expect(h).not.toContain('/kasir')
+  })
+  test('menu pemilik memuat Laporan Keuangan dan Kasir', () => {
+    const h = menuFor('pemilik').map((m) => m.href)
+    expect(h).toEqual(expect.arrayContaining(['/laporan', '/kasir', '/kasir/riwayat', '/gudang/penyesuaian']))
+  })
+})

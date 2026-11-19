@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!profil) redirect('/login')
   return (
     <div className="min-h-screen md:flex">
-      <aside className="bg-sky-900 p-4 text-sky-50 md:w-60 md:shrink-0">
+      <aside className="bg-sky-900 p-4 text-sky-50 md:w-60 md:shrink-0 print:hidden">
         <div className="mb-4 text-xl font-bold">Toko Asri</div>
         <nav className="flex flex-wrap gap-1 md:flex-col">
           {menuFor(profil.peran).map((m) => (

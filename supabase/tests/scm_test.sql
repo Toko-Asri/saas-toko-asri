@@ -11,6 +11,9 @@ $$ begin
   begin execute q; exception when others then return; end;
   raise exception 'GAGAL (seharusnya error): %', msg;
 end $$;
+-- Menulis stok langsung (simulasi pergerakan stok); aplikasi tidak boleh menulis batches secara langsung.
+create function tst.sudo(q text) returns void language plpgsql security definer as
+$$ begin execute q; end $$;
 grant execute on all functions in schema tst to authenticated;
 
 -- fixture
@@ -65,15 +68,15 @@ do $$ declare po uuid; it uuid; loc text := '22222222-0000-0000-0000-00000000000
 end $$;
 
 -- (e) saran pembelian: stok tepat = min_stock memicu satu saran; tidak duplikat; tertutup saat stok cukup
-delete from batches where product_id='33333333-0000-0000-0000-000000000002';
+select tst.sudo($q$delete from batches where product_id='33333333-0000-0000-0000-000000000002'$q$);
 do $$ begin
-  insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values ('33333333-0000-0000-0000-000000000002','22222222-0000-0000-0000-000000000001','S1',10,current_date+30);
+  perform tst.sudo($q$insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values ('33333333-0000-0000-0000-000000000002','22222222-0000-0000-0000-000000000001','S1',10,current_date+30)$q$);
   perform tst.assert((select count(*) from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000002' and status='terbuka') = 1, 'tepat satu saran saat stok = min');
   perform tst.assert((select qty_disarankan from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000002' and status='terbuka') = 40, 'qty saran = reorder_qty');
-  update batches set qty = 10 where kode_batch='S1';
-  update batches set qty = qty where product_id='33333333-0000-0000-0000-000000000002';
+  perform tst.sudo($q$update batches set qty = 10 where kode_batch='S1'$q$);
+  perform tst.sudo($q$update batches set qty = qty where product_id='33333333-0000-0000-0000-000000000002'$q$);
   perform tst.assert((select count(*) from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000002' and status='terbuka') = 1, 'tidak duplikat');
-  insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values ('33333333-0000-0000-0000-000000000002','22222222-0000-0000-0000-000000000001','S2',1,current_date+30);
+  perform tst.sudo($q$insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values ('33333333-0000-0000-0000-000000000002','22222222-0000-0000-0000-000000000001','S2',1,current_date+30)$q$);
   perform tst.assert((select count(*) from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000002' and status='terbuka') = 0, 'saran tertutup saat stok > min');
 end $$;
 
@@ -86,14 +89,14 @@ end $$;
 do $$ declare sid uuid; po uuid; begin
   select id into sid from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000001' and status='terbuka';
   if sid is null then
-    update batches set qty = 5 where product_id='33333333-0000-0000-0000-000000000001';
+    perform tst.sudo($q$update batches set qty = 5 where product_id='33333333-0000-0000-0000-000000000001'$q$);
     select id into sid from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000001' and status='terbuka';
   end if;
   perform tst.assert(sid is not null, 'ada saran P1');
   po := create_po_from_suggestion(sid);
   perform tst.assert((select status from purchase_suggestions where id=sid) = 'dipesan', 'saran ditandai dipesan');
   perform tst.assert((select qty_pesan from purchase_order_items where po_id=po) = 50, 'qty item = saran');
-  update batches set qty = qty where product_id='33333333-0000-0000-0000-000000000001';
+  perform tst.sudo($q$update batches set qty = qty where product_id='33333333-0000-0000-0000-000000000001'$q$);
   perform tst.assert((select count(*) from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000001' and status='terbuka') = 0, 'tidak ada saran baru selama PO berjalan');
   -- tanpa pemasok -> ditolak
   perform tst.expect_error(format($f$select create_po_from_suggestion(%L)$f$, (select id from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000003' and status='terbuka')), 'saran tanpa pemasok');
@@ -157,13 +160,13 @@ do $$ declare pid uuid := '33333333-0000-0000-0000-000000000005'; loc uuid := '2
   insert into products(id,sku,nama,satuan,supplier_id,min_stock,reorder_qty) values (pid,'P5','Produk 5','pcs','11111111-0000-0000-0000-000000000001',10,20);
   perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='terbuka') = 1, 'P5 awalnya disarankan');
   update purchase_suggestions set status='diabaikan' where product_id=pid and status='terbuka';
-  insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values (pid,loc,'N1',5,current_date+30);
-  update batches set qty=4 where kode_batch='N1' and product_id=pid;
+  perform tst.sudo(format($f$insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values (%L,%L,'N1',5,current_date+30)$f$, pid, loc));
+  perform tst.sudo(format($f$update batches set qty=4 where kode_batch='N1' and product_id=%L$f$, pid));
   perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='terbuka') = 0, 'saran diabaikan tidak muncul lagi');
-  insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values (pid,loc,'N2',20,current_date+30);
+  perform tst.sudo(format($f$insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values (%L,%L,'N2',20,current_date+30)$f$, pid, loc));
   perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='diabaikan') = 0, 'diabaikan direset saat stok pulih');
-  update batches set qty=1 where product_id=pid and kode_batch='N2';
-  update batches set qty=1 where product_id=pid and kode_batch='N1';
+  perform tst.sudo(format($f$update batches set qty=1 where product_id=%L and kode_batch='N2'$f$, pid));
+  perform tst.sudo(format($f$update batches set qty=1 where product_id=%L and kode_batch='N1'$f$, pid));
   perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='terbuka') = 1, 'stok turun lagi: saran baru muncul');
 end $$;
 
