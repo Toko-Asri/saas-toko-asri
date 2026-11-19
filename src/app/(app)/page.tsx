@@ -2,10 +2,17 @@ import Link from 'next/link'
 import { getSessionProfile } from '@/lib/auth'
 import { menuFor } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
+import type { KodePeriode } from '@/lib/periode'
+import { BerandaPemilik, PERIODE } from './beranda/pemilik'
 
-export default async function Beranda() {
+export default async function Beranda({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const profil = await getSessionProfile()
   if (!profil) return null
+  if (profil.peran === 'pemilik') {
+    const { p } = await searchParams
+    const periode: KodePeriode = PERIODE.some((x) => x.kode === p) ? (p as KodePeriode) : '7-hari'
+    return <BerandaPemilik periode={periode} nama={profil.nama} />
+  }
   const menu = menuFor(profil.peran).filter((m) => m.href !== '/')
   let saran: number | null = null
   if (menu.length > 0) {

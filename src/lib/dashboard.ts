@@ -40,3 +40,14 @@ export function tindakanPerluDiambil(i: MasukanTindakan): Tindakan[] {
   ]
   return semua.filter((t) => t.n > 0).map((t) => ({ kode: t.kode, teks: t.teks, tautan: t.tautan, tingkat: t.tingkat }))
 }
+
+const tglWib = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' })
+
+// Waktu relatif untuk umpan aktivitas; lebih dari 24 jam ditampilkan sebagai tanggal (WIB).
+export function waktuRelatif(iso: string, sekarang: Date = new Date()): string {
+  const selisihMenit = Math.floor((sekarang.getTime() - new Date(iso).getTime()) / 60_000)
+  if (selisihMenit < 1) return 'baru saja'
+  if (selisihMenit < 60) return `${selisihMenit} menit lalu`
+  if (selisihMenit < 24 * 60) return `${Math.floor(selisihMenit / 60)} jam lalu`
+  return tglWib.format(new Date(iso))
+}

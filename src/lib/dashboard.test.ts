@@ -69,3 +69,15 @@ describe('tindakanPerluDiambil', () => {
     })
   })
 })
+
+import { waktuRelatif } from './dashboard'
+
+describe('waktuRelatif', () => {
+  const sekarang = new Date('2026-11-19T10:00:00Z')
+  test('kurang dari semenit -> baru saja', () => expect(waktuRelatif('2026-11-19T09:59:30Z', sekarang)).toBe('baru saja'))
+  test('menit', () => expect(waktuRelatif('2026-11-19T09:45:00Z', sekarang)).toBe('15 menit lalu'))
+  test('jam', () => expect(waktuRelatif('2026-11-19T07:00:00Z', sekarang)).toBe('3 jam lalu'))
+  test('lebih dari 24 jam -> tanggal WIB', () => expect(waktuRelatif('2026-11-17T09:00:00Z', sekarang)).toBe('17 Nov 2026'))
+  test('di masa depan (selisih jam server) dianggap baru saja', () => expect(waktuRelatif('2026-11-19T10:00:20Z', sekarang)).toBe('baru saja'))
+  test('tanggal WIB mengikuti zona Jakarta, bukan UTC', () => expect(waktuRelatif('2026-11-17T20:00:00Z', sekarang)).toBe('18 Nov 2026'))
+})
