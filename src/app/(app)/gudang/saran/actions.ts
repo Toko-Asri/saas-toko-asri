@@ -22,5 +22,14 @@ export async function abaikanSaran(fd: FormData) {
   const { error } = await supabase.from('purchase_suggestions').update({ status: 'diabaikan' }).eq('id', str(fd, 'id')).eq('status', 'terbuka')
   if (error) kembali(PATH, { error: pesanGalat(error) })
   revalidatePath(PATH)
-  kembali(PATH, { ok: 'Saran diabaikan' })
+  kembali(PATH, { ok: 'Saran diabaikan sampai stok pulih di atas minimum' })
+}
+
+export async function bukaKembaliSaran(fd: FormData) {
+  await assertGudang()
+  const supabase = await createClient()
+  const { error } = await supabase.from('purchase_suggestions').update({ status: 'terbuka' }).eq('id', str(fd, 'id')).eq('status', 'diabaikan')
+  if (error) kembali(PATH, { error: pesanGalat(error) })
+  revalidatePath(PATH)
+  kembali(PATH, { ok: 'Saran dibuka kembali' })
 }

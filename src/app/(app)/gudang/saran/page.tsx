@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatTanggal } from '@/lib/format'
 import { Banner, PageHeader, Table, btnCls, btnGhostCls } from '@/components/ui'
-import { abaikanSaran, buatPoDariSaran } from './actions'
+import { abaikanSaran, bukaKembaliSaran, buatPoDariSaran } from './actions'
 
 export default async function SaranPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string }> }) {
   const { error, ok } = await searchParams
@@ -10,6 +10,10 @@ export default async function SaranPage({ searchParams }: { searchParams: Promis
     .from('purchase_suggestions')
     .select('id, qty_disarankan, created_at, product_id, products(nama, sku, satuan, min_stock, suppliers(nama))')
     .eq('status', 'terbuka').order('created_at')
+  const { data: diabaikan } = await supabase
+    .from('purchase_suggestions')
+    .select('id, qty_disarankan, products(nama, satuan)')
+    .eq('status', 'diabaikan').order('created_at')
   const ids = (saran ?? []).map((s) => s.product_id)
   const { data: batch } = ids.length
     ? await supabase.from('batches').select('product_id, qty').in('product_id', ids)
@@ -41,6 +45,24 @@ export default async function SaranPage({ searchParams }: { searchParams: Promis
           )
         })}
       </Table>
+      {(diabaikan ?? []).length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold">Diabaikan</h2>
+          <p className="text-sm text-slate-500">Tidak muncul lagi sampai stok produk pulih di atas minimum.</p>
+          <Table head={['Produk', 'Disarankan pesan', '']}>
+            {(diabaikan ?? []).map((s) => {
+              const p = s.products as unknown as { nama: string; satuan: string }
+              return (
+                <tr key={s.id}>
+                  <td className="px-3 py-2 font-medium">{p.nama}</td>
+                  <td className="px-3 py-2">{s.qty_disarankan} {p.satuan}</td>
+                  <td className="px-3 py-2"><form action={bukaKembaliSaran}><input type="hidden" name="id" value={s.id} /><button className={btnGhostCls}>Buka kembali</button></form></td>
+                </tr>
+              )
+            })}
+          </Table>
+        </>
+      )}
     </div>
   )
 }

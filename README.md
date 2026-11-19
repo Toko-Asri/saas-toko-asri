@@ -35,7 +35,7 @@ Pilih salah satu cara.
 **Cara A: SQL Editor (paling mudah)**
 
 1. Di dashboard buka **SQL Editor → New query**.
-2. Salin seluruh isi `supabase/migrations/20261119000100_scm_schema.sql`, tempel, lalu **Run**. Harus berhasil tanpa galat.
+2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (saat ini `20261119000100_scm_schema.sql`, lalu `20261120000100_saran_diabaikan.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan file pertama, cukup jalankan file yang baru.
 3. Buka query baru, salin isi `supabase/seed.sql`, **Run**. Ini mengisi 3 pemasok, 4 lokasi simpan, 17 produk, 20 batch (ada yang hampir/sudah kedaluwarsa), 3 saran pembelian, dan 2 PO contoh.
 
 **Cara B: Supabase CLI**
@@ -103,7 +103,7 @@ Masuk dengan salah satu akun di atas. Untuk memeriksa build produksi: `npm run b
 - **Lokasi simpan**: freezer/chiller/rak kering beserta rentang suhu (°C).
 - **Produk**: SKU, pemasok, harga beli/jual, **stok minimum** dan **jumlah pesan ulang**.
 - **Inventori per batch**: kode batch, lokasi dan suhu, tanggal kedaluwarsa, urut terdekat (**FEFO**); lencana *Aman / Hampir kedaluwarsa (≤14 hari) / Kedaluwarsa* (kedaluwarsa hari ini dihitung kedaluwarsa); stok layak jual dipisah dari stok kedaluwarsa; filter.
-- **Saran pembelian otomatis**: saat total stok produk ≤ stok minimum, sistem membuat satu saran (tidak duplikat); saran menutup sendiri saat stok cukup.
+- **Saran pembelian otomatis**: saat total stok produk ≤ stok minimum, sistem membuat satu saran (tidak duplikat); saran menutup sendiri saat stok cukup. Saran yang **diabaikan** tidak muncul lagi sampai stok pulih di atas minimum (bisa dibuka kembali dari daftar *Diabaikan*).
 - **Pesanan pembelian (PO)**: draft → dipesan → diterima, atau dibatalkan (tidak bisa jika sudah ada barang diterima; saran terkait kembali terbuka). Dapat dibuat dari saran atau manual.
 - **Penerimaan barang**: mendukung penerimaan sebagian; membentuk batch baru (kode, lokasi, kedaluwarsa wajib); menolak penerimaan melebihi pesanan atau berulang.
 - **Login & peran** dengan Row Level Security di semua tabel; staf gudang tidak dapat mengubah perannya sendiri.

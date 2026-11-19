@@ -146,13 +146,34 @@ do $$ declare po uuid; it uuid; begin
   perform tst.expect_error(format($f$select set_po_status(%L,'dipesan')$f$, po), 'dibatalkan -> dipesan');
 end $$;
 
+-- (o) harga_beli null pada item PO -> memakai harga beli produk (bukan 0)
+do $$ declare po uuid; begin
+  po := create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000001","qty":2,"harga_beli":null}]'::jsonb);
+  perform tst.assert((select harga_beli from purchase_order_items where po_id=po) = 1000, 'harga null memakai harga produk');
+end $$;
+
+-- (n) saran yang diabaikan tidak muncul lagi selama stok masih <= min; reset setelah stok pulih
+do $$ declare pid uuid := '33333333-0000-0000-0000-000000000005'; loc uuid := '22222222-0000-0000-0000-000000000001'; begin
+  insert into products(id,sku,nama,satuan,supplier_id,min_stock,reorder_qty) values (pid,'P5','Produk 5','pcs','11111111-0000-0000-0000-000000000001',10,20);
+  perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='terbuka') = 1, 'P5 awalnya disarankan');
+  update purchase_suggestions set status='diabaikan' where product_id=pid and status='terbuka';
+  insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values (pid,loc,'N1',5,current_date+30);
+  update batches set qty=4 where kode_batch='N1' and product_id=pid;
+  perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='terbuka') = 0, 'saran diabaikan tidak muncul lagi');
+  insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa) values (pid,loc,'N2',20,current_date+30);
+  perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='diabaikan') = 0, 'diabaikan direset saat stok pulih');
+  update batches set qty=1 where product_id=pid and kode_batch='N2';
+  update batches set qty=1 where product_id=pid and kode_batch='N1';
+  perform tst.assert((select count(*) from purchase_suggestions where product_id=pid and status='terbuka') = 1, 'stok turun lagi: saran baru muncul');
+end $$;
+
 -- (h) RLS: kasir
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a2',true);
 select tst.expect_error($q$insert into suppliers(nama) values ('X')$q$, 'kasir tulis pemasok');
 select tst.expect_error($q$select receive_goods('11111111-0000-0000-0000-000000000009','[]'::jsonb)$q$, 'kasir receive_goods');
 select tst.expect_error($q$select create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000001","qty":1,"harga_beli":1}]'::jsonb)$q$, 'kasir create_po');
 select tst.assert((select count(*) from batches) > 0, 'kasir boleh baca batch');
-select tst.assert((select count(*) from products) = 4, 'kasir boleh baca produk');
+select tst.assert((select count(*) from products) = 5, 'kasir boleh baca produk');
 select tst.assert((select count(*) from purchase_orders) = 0, 'kasir tidak lihat PO');
 
 -- (i) staf gudang tidak bisa menaikkan perannya sendiri

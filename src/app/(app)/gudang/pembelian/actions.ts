@@ -3,20 +3,15 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { assertGudang } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { parseItemsPo } from '@/lib/po-items'
 import { kembali, pesanGalat, str } from '../_lib'
 
 export async function buatPo(fd: FormData) {
   await assertGudang()
   const supplier = str(fd, 'supplier_id')
-  const items: { product_id: string; qty: number; harga_beli: number }[] = []
-  for (const [k, v] of fd.entries()) {
-    if (!k.startsWith('qty_')) continue
-    const qty = Number(String(v).trim() === '' ? 0 : v)
-    if (qty === 0) continue
-    if (!Number.isInteger(qty) || qty < 0) kembali(`/gudang/pembelian/baru?supplier=${supplier}`, { error: 'Jumlah pesan harus bilangan bulat positif' })
-    const pid = k.slice(4)
-    items.push({ product_id: pid, qty, harga_beli: Number(str(fd, 'harga_' + pid)) })
-  }
+  const hasil = parseItemsPo(fd)
+  if (hasil.error) kembali(`/gudang/pembelian/baru?supplier=${supplier}`, { error: hasil.error })
+  const items = hasil.items ?? []
   if (!supplier) kembali('/gudang/pembelian/baru', { error: 'Pilih pemasok terlebih dahulu' })
   if (items.length === 0) kembali(`/gudang/pembelian/baru?supplier=${supplier}`, { error: 'Isi jumlah pesan minimal untuk satu produk' })
   const supabase = await createClient()
