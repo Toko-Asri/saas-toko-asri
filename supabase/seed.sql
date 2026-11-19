@@ -2,6 +2,9 @@
 -- Jalankan SETELAH migration, di proyek Supabase DEMO (bukan produksi).
 begin;
 
+delete from sale_items;                -- riwayat penjualan dulu (mereferensikan batch dan produk)
+delete from sales;
+delete from stock_adjustments;
 delete from batches;                 -- trigger membuat saran, jadi hapus saran sesudahnya
 delete from purchase_suggestions;
 delete from purchase_order_items;
@@ -80,5 +83,53 @@ union all
 select 'c0000000-0000-0000-0000-000000000001'::uuid, id, 20, 0, 70000 from products where sku = 'UDG-KPS-500'
 union all
 select 'c0000000-0000-0000-0000-000000000002'::uuid, id, 60, 60, 38000 from products where sku = 'AYM-POT-1000';
+
+-- ===== Tahap 2 (ERP): biaya batch + riwayat penjualan 30 hari + penyesuaian stok =====
+-- Riwayat disisipkan langsung (bukan lewat checkout) sehingga TIDAK mengubah stok batch di atas.
+update batches b set harga_beli = p.harga_beli from products p where p.id = b.product_id;
+
+create temp table seed_trx on commit drop as
+select g as i, gen_random_uuid() as id,
+       (array['tunai','qris','transfer','tunai'])[1 + g % 4] as metode,
+       ((current_date - (1 + g % 30))::text || ' ' || lpad((8 + g % 13)::text, 2, '0') || ':' || lpad(((g * 7) % 60)::text, 2, '0') || ':00+07')::timestamptz as waktu
+from generate_series(1, 70) g;
+
+create temp table seed_item on commit drop as
+with prod as (
+  select p.id, p.harga_jual, p.harga_beli, row_number() over (order by p.sku) as rn,
+         (select b.id from batches b where b.product_id = p.id order by b.tgl_kedaluwarsa limit 1) as batch_id
+  from products p),
+n as (select count(*) as c from prod)
+select t.id as sale_id, p.id as product_id, p.batch_id,
+       1 + ((t.i + k) % 4) as qty, p.harga_jual, p.harga_beli as hpp_satuan
+from seed_trx t
+cross join generate_series(0, t.i % 3) k
+cross join n
+join prod p on p.rn = ((t.i * 3 + k * 5) % n.c) + 1
+where p.batch_id is not null;
+
+insert into sales (id, kasir_id, metode, total, bayar, kembalian, idempotency_key, created_at)
+select t.id, null, t.metode, x.total,
+       case when t.metode = 'tunai' then ceil(x.total / 10000.0) * 10000 else x.total end,
+       case when t.metode = 'tunai' then ceil(x.total / 10000.0) * 10000 - x.total else 0 end,
+       gen_random_uuid(), t.waktu
+from seed_trx t
+join (select sale_id, sum(qty * harga_jual) as total from seed_item group by sale_id) x on x.sale_id = t.id;
+
+insert into sale_items (sale_id, product_id, batch_id, qty, harga_jual, hpp_satuan)
+select sale_id, product_id, batch_id, qty, harga_jual, hpp_satuan from seed_item;
+
+-- Contoh penyesuaian stok (riwayat): qty_sesudah = qty batch saat ini
+insert into stock_adjustments (batch_id, product_id, qty_sebelum, qty_sesudah, alasan, catatan, nilai, created_at)
+select b.id, b.product_id, b.qty + v.selisih, b.qty, v.alasan, v.catatan, v.selisih * b.harga_beli,
+       now() - (v.hari || ' days')::interval
+from (values
+  ('SSG-2409A', 4, 'kedaluwarsa', 'Dibuang sebagian karena lewat tanggal', 3),
+  ('BKS-2410A', 2, 'rusak', 'Kemasan sobek saat bongkar muat', 6),
+  ('ESV-2410A', 3, 'rusak', 'Freezer sempat mati, es krim mencair', 9),
+  ('DMP-2410A', 1, 'hilang', 'Selisih saat stok opname', 12),
+  ('NGT-2411A', 2, 'rusak', 'Kemasan penyok', 15)
+) as v(kode, selisih, alasan, catatan, hari)
+join batches b on b.kode_batch = v.kode;
 
 commit;
