@@ -228,7 +228,22 @@ begin
   end if;
 end $$;
 
-revoke all on function require_gudang(), refresh_suggestion(uuid) from public, anon, authenticated;
+-- Pembatalan PO: tolak bila sudah ada barang diterima; saran terkait kembali terbuka.
+create function trg_po_batal() returns trigger
+language plpgsql security definer set search_path = public as
+$$ begin
+  if new.status = 'dibatalkan' and old.status <> 'dibatalkan' then
+    if exists (select 1 from purchase_order_items where po_id = new.id and qty_diterima > 0) then
+      raise exception 'PO yang sudah menerima barang tidak dapat dibatalkan';
+    end if;
+    update purchase_suggestions set status = 'terbuka', po_id = null where po_id = new.id and status = 'dipesan';
+  end if;
+  return null;
+end $$;
+create trigger po_batal after update of status on purchase_orders
+  for each row execute function trg_po_batal();
+
+revoke all on function require_gudang(), refresh_suggestion(uuid), trg_po_batal() from public, anon, authenticated;
 revoke all on function current_peran(),
   create_po(uuid, jsonb), create_po_from_suggestion(uuid), receive_goods(uuid, jsonb) from public, anon;
 grant execute on function current_peran(), create_po(uuid, jsonb), create_po_from_suggestion(uuid), receive_goods(uuid, jsonb) to authenticated;

@@ -99,6 +99,21 @@ do $$ declare sid uuid; po uuid; begin
   perform tst.expect_error(format($f$select create_po_from_suggestion(%L)$f$, (select id from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000003' and status='terbuka')), 'saran tanpa pemasok');
 end $$;
 
+
+-- (j) pembatalan PO: saran kembali terbuka; PO yang sudah menerima barang tidak bisa dibatalkan
+do $$ declare sid uuid; po uuid; po2 uuid; it uuid; begin
+  select id into sid from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000001' and status='dipesan';
+  select po_id into po from purchase_suggestions where id = sid;
+  update purchase_orders set status='dibatalkan' where id = po;
+  perform tst.assert((select status from purchase_suggestions where id=sid) = 'terbuka', 'saran kembali terbuka setelah PO batal');
+  perform tst.assert((select po_id from purchase_suggestions where id=sid) is null, 'po_id saran dikosongkan');
+  po2 := create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000001","qty":9,"harga_beli":1000}]'::jsonb);
+  select id into it from purchase_order_items where po_id = po2;
+  update purchase_orders set status='dipesan' where id = po2;
+  perform receive_goods(po2, format('[{"item_id":"%s","qty":2,"location_id":"22222222-0000-0000-0000-000000000001","kode_batch":"PB1","tgl_kedaluwarsa":"2099-01-01"}]', it)::jsonb);
+  perform tst.expect_error(format($f$update purchase_orders set status='dibatalkan' where id=%L$f$, po2), 'batal PO yang sudah menerima barang');
+end $$;
+
 -- (h) RLS: kasir
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a2',true);
 select tst.expect_error($q$insert into suppliers(nama) values ('X')$q$, 'kasir tulis pemasok');
