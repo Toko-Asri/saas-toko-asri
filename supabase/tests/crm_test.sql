@@ -113,5 +113,91 @@ select tst.as_user('00000000-0000-0000-0000-0000000000c3');
 select tst.assert((select count(*) from pelanggan_segmen) = 0, 'staf gudang tidak melihat segmentasi');
 reset role;
 
+
+-- ===== Task 2: checkout dengan pelanggan =====
+insert into storage_locations(id,nama,tipe) values ('d1000000-0000-0000-0000-000000000001','Freezer CRM','freezer');
+insert into products(id,sku,nama,satuan,harga_beli,harga_jual,min_stock,reorder_qty) values
+  ('d2000000-0000-0000-0000-000000000001','CP','Produk CRM','pcs',6000,12500,0,10),
+  ('d2000000-0000-0000-0000-000000000002','CQ','Produk 9999','pcs',5000,9999,0,10);
+insert into batches(product_id,location_id,kode_batch,qty,tgl_kedaluwarsa,harga_beli) values
+  ('d2000000-0000-0000-0000-000000000001','d1000000-0000-0000-0000-000000000001','CRM1',1000,(now() at time zone 'Asia/Jakarta')::date+90,6000),
+  ('d2000000-0000-0000-0000-000000000002','d1000000-0000-0000-0000-000000000001','CRM2',50,(now() at time zone 'Asia/Jakarta')::date+90,5000);
+insert into customers(id,nama,telepon) values
+  ('d3000000-0000-0000-0000-00000000000a','Pelanggan A','62899000001'),
+  ('d3000000-0000-0000-0000-00000000000c','Pelanggan C','62899000003');
+insert into customers(id,nama,telepon,aktif) values ('d3000000-0000-0000-0000-00000000000b','Pelanggan B (nonaktif)','62899000002',false);
+
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000c1');
+
+-- (a) transaksi pertama: Rp25.000 -> 2 poin
+do $$ declare s uuid; begin
+  s := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',25000,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a');
+  perform tst.assert((select customer_id from sales where id=s) = 'd3000000-0000-0000-0000-00000000000a', 'sales.customer_id terisi');
+  perform tst.assert((select poin from sales where id=s) = 2, 'sales.poin = 2');
+  perform tst.assert((select poin||'/'||total_belanja||'/'||jumlah_transaksi||'/'||tier from customers where id='d3000000-0000-0000-0000-00000000000a') = '2/25000/1/reguler', 'hitungan pelanggan setelah transaksi 1');
+  perform tst.assert((select terakhir_belanja from customers where id='d3000000-0000-0000-0000-00000000000a') is not null, 'terakhir_belanja terisi');
+end $$;
+
+-- (b) kumulatif tepat 500.000 -> silver; 2.000.000 -> gold
+do $$ declare s uuid; begin
+  s := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":38}]'::jsonb,'tunai',475000,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a');
+  perform tst.assert((select tier||'/'||total_belanja||'/'||poin from customers where id='d3000000-0000-0000-0000-00000000000a') = 'silver/500000/49', 'tepat 500000 = silver, poin 2+47');
+  s := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":120}]'::jsonb,'qris',1500000,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a');
+  perform tst.assert((select tier||'/'||total_belanja||'/'||jumlah_transaksi from customers where id='d3000000-0000-0000-0000-00000000000a') = 'gold/2000000/3', 'tepat 2000000 = gold');
+end $$;
+
+-- (c) pembulatan poin per transaksi: Rp9.999 -> 0 poin, total belanja tetap bertambah
+do $$ begin
+  perform checkout('[{"product_id":"d2000000-0000-0000-0000-000000000002","qty":1}]'::jsonb,'tunai',9999,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000c');
+  perform checkout('[{"product_id":"d2000000-0000-0000-0000-000000000002","qty":1}]'::jsonb,'tunai',9999,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000c');
+  perform tst.assert((select poin||'/'||total_belanja||'/'||jumlah_transaksi||'/'||tier from customers where id='d3000000-0000-0000-0000-00000000000c') = '0/19998/2/reguler', 'Rp9.999 dua kali: poin tetap 0');
+end $$;
+
+-- (d) transaksi gagal tidak mengubah pelanggan maupun stok
+do $$ declare awal text; stok int; begin
+  select poin||'/'||total_belanja||'/'||jumlah_transaksi||'/'||tier into awal from customers where id='d3000000-0000-0000-0000-00000000000a';
+  select sum(qty) into stok from batches where product_id='d2000000-0000-0000-0000-000000000001';
+  perform tst.expect_error($q$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":99999}]'::jsonb,'tunai',999999999,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a')$q$, 'stok kurang');
+  perform tst.expect_error($q$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',1,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a')$q$, 'bayar kurang');
+  perform tst.assert((select poin||'/'||total_belanja||'/'||jumlah_transaksi||'/'||tier from customers where id='d3000000-0000-0000-0000-00000000000a') = awal, 'pelanggan tidak berubah setelah gagal');
+  perform tst.assert((select sum(qty) from batches where product_id='d2000000-0000-0000-0000-000000000001') = stok, 'stok tidak berubah setelah gagal');
+end $$;
+
+-- (e) idempotensi: kirim ulang tidak menambah poin dua kali; kunci sama pelanggan lain ditolak
+do $$ declare k uuid := gen_random_uuid(); s1 uuid; s2 uuid; poin_awal int; begin
+  select poin into poin_awal from customers where id='d3000000-0000-0000-0000-00000000000c';
+  s1 := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":4}]'::jsonb,'tunai',50000,k,'d3000000-0000-0000-0000-00000000000c');
+  s2 := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":4}]'::jsonb,'tunai',50000.00,k,'d3000000-0000-0000-0000-00000000000c');
+  perform tst.assert(s1 = s2, 'kirim ulang mengembalikan transaksi yang sama');
+  perform tst.assert((select poin from customers where id='d3000000-0000-0000-0000-00000000000c') = poin_awal + 5, 'poin hanya bertambah sekali (50000 = 5 poin)');
+  perform tst.assert((select jumlah_transaksi from customers where id='d3000000-0000-0000-0000-00000000000c') = 3, 'jumlah transaksi bertambah sekali');
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":4}]'::jsonb,'tunai',50000,%L,'d3000000-0000-0000-0000-00000000000a')$f$, k), 'kunci sama, pelanggan berbeda');
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":4}]'::jsonb,'tunai',50000,%L)$f$, k), 'kunci sama, tanpa pelanggan');
+end $$;
+
+-- (f) pelanggan nonaktif / tidak ada ditolak, stok tidak berubah
+do $$ declare stok int; begin
+  select sum(qty) into stok from batches where product_id='d2000000-0000-0000-0000-000000000001';
+  perform tst.expect_error($q$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',12500,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000b')$q$, 'pelanggan nonaktif');
+  perform tst.expect_error($q$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',12500,gen_random_uuid(),gen_random_uuid())$q$, 'pelanggan tidak ada');
+  perform tst.assert((select sum(qty) from batches where product_id='d2000000-0000-0000-0000-000000000001') = stok, 'stok tidak berubah');
+end $$;
+
+-- (g) tamu: tanpa pelanggan, tidak ada pelanggan yang berubah
+do $$ declare total_poin bigint; s uuid; begin
+  select sum(poin) into total_poin from customers;
+  s := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',25000,gen_random_uuid());
+  perform tst.assert((select customer_id is null and poin = 0 from sales where id=s), 'penjualan tamu: customer_id null, poin 0');
+  perform tst.assert((select sum(poin) from customers) = total_poin, 'tidak ada pelanggan berubah');
+end $$;
+
+-- (h) pelanggan bersama: kasir lain boleh memakainya; staf gudang tetap ditolak
+select tst.as_user('00000000-0000-0000-0000-0000000000c2');
+select tst.assert(checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',12500,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a') is not null, 'kasir B memakai pelanggan yang sama');
+select tst.as_user('00000000-0000-0000-0000-0000000000c3');
+select tst.expect_error($q$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',12500,gen_random_uuid(),'d3000000-0000-0000-0000-00000000000a')$q$, 'staf gudang checkout');
+reset role;
+
 rollback;
 \echo 'SEMUA UJI CRM LULUS'
