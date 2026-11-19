@@ -18,22 +18,32 @@ const KASIR: MenuItem[] = [
   { href: '/kasir/riwayat', label: 'Riwayat Penjualan' },
 ]
 const LAPORAN: MenuItem = { href: '/laporan', label: 'Laporan Keuangan' }
+const PELANGGAN: MenuItem = { href: '/pelanggan', label: 'Pelanggan' }
+const SEGMENTASI: MenuItem = { href: '/pelanggan/segmen', label: 'Segmentasi Pelanggan' }
 
 const MENU: Record<Peran, MenuItem[]> = {
-  pemilik: [BERANDA, ...KASIR, ...GUDANG, PENYESUAIAN, LAPORAN],
+  pemilik: [BERANDA, ...KASIR, PELANGGAN, SEGMENTASI, ...GUDANG, PENYESUAIAN, LAPORAN],
   staf_gudang: [BERANDA, ...GUDANG, PENYESUAIAN],
-  kasir: [BERANDA, ...KASIR],
+  kasir: [BERANDA, ...KASIR, PELANGGAN],
 }
 
 // Awalan rute yang boleh dibuka selain beranda ('/'), per peran.
 const PREFIX: Record<Peran, string[] | 'semua'> = {
   pemilik: 'semua',
   staf_gudang: ['/gudang'],
-  kasir: ['/kasir'],
+  kasir: ['/kasir', '/pelanggan'],
+}
+
+// Rute yang ditolak walau awalannya diizinkan (diperiksa lebih dulu).
+const TOLAK: Record<Peran, string[]> = {
+  pemilik: [],
+  staf_gudang: [],
+  kasir: ['/pelanggan/segmen'],
 }
 
 export function canAccess(peran: Peran, path: string): boolean {
   if (path === '/') return true
+  if (TOLAK[peran].some((p) => path === p || path.startsWith(p + '/'))) return false
   const rule = PREFIX[peran]
   if (rule === 'semua') return true
   return rule.some((p) => path === p || path.startsWith(p + '/'))

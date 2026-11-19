@@ -4,12 +4,15 @@ import { useRouter } from 'next/navigation'
 import { formatRupiah } from '@/lib/format'
 import { kembalian, keItemCheckout, sinkronKeranjang, tambah, total, ubahQty, type BarisKeranjang } from '@/lib/pos-cart'
 import { btnCls, btnGhostCls, inputCls } from '@/components/ui'
-import { bayar } from './actions'
+import { poinDari } from '@/lib/loyalty'
+import { saringPelanggan } from '@/lib/pelanggan'
+import { LencanaTier } from '@/components/ui'
+import { bayar, tambahPelangganCepat, type PelangganPos } from './actions'
 
 export type ProdukPos = { id: string; sku: string; nama: string; satuan: string; harga: number; stokLayak: number }
 type Metode = 'tunai' | 'qris' | 'transfer'
 
-export function Pos({ produk }: { produk: ProdukPos[] }) {
+export function Pos({ produk, pelanggan }: { produk: ProdukPos[]; pelanggan: PelangganPos[] }) {
   const router = useRouter()
   const [cari, setCari] = useState('')
   const [mentah, setKeranjang] = useState<BarisKeranjang[]>([])
@@ -17,6 +20,13 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
   const [bayarStr, setBayarStr] = useState('')
   const [memproses, setMemproses] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
+  const [cariPelanggan, setCariPelanggan] = useState('')
+  const [pelangganId, setPelangganId] = useState<string | null>(null)
+  const [baru, setBaru] = useState<PelangganPos[]>([])        // pelanggan yang baru ditambahkan dari kasir
+  const [formBaru, setFormBaru] = useState(false)
+  const [namaBaru, setNamaBaru] = useState('')
+  const [teleponBaru, setTeleponBaru] = useState('')
+  const [galatBaru, setGalatBaru] = useState<string | null>(null)
   // Kunci idempoten: dibuat saat pertama kali bayar dan DIPERTAHANKAN sampai transaksi berhasil atau keranjang
   // dikosongkan. Kirim ulang (klik ganda / respons hilang) memakai kunci yang sama sehingga tidak menjadi
   // transaksi ganda; server menolak kunci yang sama bila isinya berbeda.
@@ -28,6 +38,11 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
     [mentah, produk],
   )
   useEffect(() => { if (keranjang.length === 0) kunci.current = null }, [keranjang.length])
+
+  const semuaPelanggan = useMemo(() => [...baru.filter((b) => !pelanggan.some((p) => p.id === b.id)), ...pelanggan], [baru, pelanggan])
+  // pelanggan terpilih diselaraskan dengan data server terbaru; hilang bila sudah nonaktif
+  const terpilih = semuaPelanggan.find((p) => p.id === pelangganId) ?? null
+  const hasilCari = saringPelanggan(semuaPelanggan, cariPelanggan)
 
   const totalBayar = total(keranjang)
   const jumlahBayar = metode === 'tunai' ? Number(bayarStr || 0) : totalBayar
@@ -47,7 +62,17 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
     setKeranjang([])
     setBayarStr('')
     setGalat(null)
+    setPelangganId(null)
     kunci.current = null
+  }
+
+  async function simpanPelangganBaru() {
+    setGalatBaru(null)
+    const h = await tambahPelangganCepat({ nama: namaBaru, telepon: teleponBaru })
+    if (h.error || !h.pelanggan) { setGalatBaru(h.error ?? 'Gagal menambah pelanggan'); return }
+    setBaru((b) => [h.pelanggan!, ...b])
+    setPelangganId(h.pelanggan.id)
+    setFormBaru(false); setNamaBaru(''); setTeleponBaru(''); setCariPelanggan('')
   }
 
   async function prosesBayar() {
@@ -55,7 +80,7 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
     setMemproses(true)
     setGalat(null)
     try {
-      const hasil = await bayar({ items: keItemCheckout(keranjang), metode, bayar: jumlahBayar, key: kunciUntuk() })
+      const hasil = await bayar({ items: keItemCheckout(keranjang), metode, bayar: jumlahBayar, key: kunciUntuk(), customerId: terpilih?.id ?? null })
       if (hasil.error) {
         setGalat(hasil.error.includes('Kunci transaksi')
           ? 'Transaksi dengan keranjang ini mungkin sudah tercatat. Periksa Riwayat Penjualan; jika belum ada, tekan "Kosongkan keranjang" lalu input ulang.'
@@ -113,6 +138,45 @@ export function Pos({ produk }: { produk: ProdukPos[] }) {
             </li>
           ))}
         </ul>
+
+        <div className="space-y-2 rounded border p-3 text-sm">
+          <div className="font-medium">Pelanggan</div>
+          {terpilih ? (
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="font-medium">{terpilih.nama} <LencanaTier tier={terpilih.tier} /></div>
+                <div className="text-slate-500">{terpilih.poin} poin{totalBayar > 0 ? ` · transaksi ini +${poinDari(totalBayar)} poin` : ''}</div>
+              </div>
+              <button type="button" className={btnGhostCls} onClick={() => setPelangganId(null)}>Ganti</button>
+            </div>
+          ) : (
+            <>
+              {pelangganId && <p role="alert" className="rounded bg-amber-50 p-2 text-xs text-amber-800">Pelanggan yang dipilih tidak lagi tersedia (mungkin dinonaktifkan). Pilih pelanggan lain, atau lanjutkan sebagai tamu.</p>}
+              <input value={cariPelanggan} onChange={(e) => setCariPelanggan(e.target.value)} placeholder="Cari nama atau telepon… (kosong = tamu)" className={inputCls} aria-label="Cari pelanggan" />
+              {hasilCari.length > 0 && (
+                <ul className="divide-y rounded border bg-white">
+                  {hasilCari.map((p) => (
+                    <li key={p.id}><button type="button" onClick={() => { setPelangganId(p.id); setCariPelanggan('') }} className="flex w-full items-center justify-between px-2 py-1 text-left hover:bg-slate-50">
+                      <span>{p.nama}<span className="ml-2 text-xs text-slate-500">{p.telepon ?? ''}</span></span><LencanaTier tier={p.tier} />
+                    </button></li>
+                  ))}
+                </ul>
+              )}
+              {cariPelanggan.trim() !== '' && hasilCari.length === 0 && <p className="text-xs text-slate-500">Tidak ditemukan.</p>}
+              {!formBaru ? (
+                <button type="button" className={btnGhostCls} onClick={() => { setFormBaru(true); setNamaBaru(cariPelanggan.trim()) }}>+ Pelanggan baru</button>
+              ) : (
+                <div className="space-y-2">
+                  <input value={namaBaru} onChange={(e) => setNamaBaru(e.target.value)} placeholder="Nama *" className={inputCls} aria-label="Nama pelanggan baru" />
+                  <input value={teleponBaru} onChange={(e) => setTeleponBaru(e.target.value)} placeholder="Telepon / WhatsApp" inputMode="tel" className={inputCls} aria-label="Telepon pelanggan baru" />
+                  {galatBaru && <p role="alert" className="text-xs text-red-700">{galatBaru}</p>}
+                  <div className="flex gap-2"><button type="button" className={btnCls} onClick={simpanPelangganBaru}>Simpan</button><button type="button" className={btnGhostCls} onClick={() => setFormBaru(false)}>Batal</button></div>
+                </div>
+              )}
+              <p className="text-xs text-slate-500">Tanpa pelanggan, transaksi dicatat sebagai tamu (tanpa poin).</p>
+            </>
+          )}
+        </div>
 
         <div className="flex justify-between border-t pt-3 text-lg font-bold"><span>Total</span><span>{formatRupiah(totalBayar)}</span></div>
 

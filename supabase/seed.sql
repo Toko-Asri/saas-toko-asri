@@ -4,6 +4,7 @@ begin;
 
 delete from sale_items;                -- riwayat penjualan dulu (mereferensikan batch dan produk)
 delete from sales;
+delete from customers;               -- setelah sales (sales.customer_id mereferensikan pelanggan)
 delete from stock_adjustments;
 delete from batches;                 -- trigger membuat saran, jadi hapus saran sesudahnya
 delete from purchase_suggestions;
@@ -91,8 +92,9 @@ update batches b set harga_beli = p.harga_beli from products p where p.id = b.pr
 create temp table seed_trx on commit drop as
 select g as i, gen_random_uuid() as id,
        (array['tunai','qris','transfer','tunai'])[1 + g % 4] as metode,
-       ((current_date - (1 + g % 30))::text || ' ' || lpad((8 + g % 13)::text, 2, '0') || ':' || lpad(((g * 7) % 60)::text, 2, '0') || ':00+07')::timestamptz as waktu
-from generate_series(1, 70) g;
+       ((current_date - case when g <= 70 then 1 + g % 30
+                             else (array[35,52,48,75,88,70,100,115,95,120,105,118,45,60,90])[g - 70] end)::text || ' ' || lpad((8 + g % 13)::text, 2, '0') || ':' || lpad(((g * 7) % 60)::text, 2, '0') || ':00+07')::timestamptz as waktu
+from generate_series(1, 85) g;   -- 1..70: 30 hari terakhir; 71..85: penjualan lama (31-120 hari) untuk segmen berisiko/tidak aktif
 
 create temp table seed_item on commit drop as
 with prod as (
@@ -131,5 +133,38 @@ from (values
   ('NGT-2411A', 2, 'rusak', 'Kemasan penyok', 15)
 ) as v(kode, selisih, alasan, catatan, hari)
 join batches b on b.kode_batch = v.kode;
+
+-- ===== Tahap 3 (CRM): 25 pelanggan fiktif, penjualan berpelanggan, hitungan dari sales =====
+insert into customers (nama, telepon, email, alamat, tgl_daftar)
+select (array['Ani Wijaya','Budi Santoso','Citra Lestari','Dedi Pratama','Eka Putri','Fajar Nugroho','Gita Rahma','Hendra Gunawan',
+              'Indah Permata','Joko Susilo','Kartika Sari','Lukman Hakim','Maya Anggraini','Nanda Saputra','Olivia Tan','Putra Mahendra',
+              'Qori Amalia','Rina Marlina','Satria Utama','Tania Dewi','Umar Fadli','Vina Oktavia','Wawan Setiawan','Yuni Astuti','Zaki Ramadhan'])[n],
+       '62812000' || lpad(n::text, 4, '0'),
+       case when n % 2 = 1 then 'pelanggan' || n || '@contoh.id' end,
+       'Jl. Contoh No. ' || n || ', Jakarta',
+       ((current_date - case when n <= 13 then 200 when n = 14 then 130 when n <= 20 then 180
+                             else (array[3,7,12,20,28])[n - 20] end)::text || ' 09:00:00+07')::timestamptz
+from generate_series(1, 25) n;
+
+-- Penugasan deterministik (condong: beberapa pelanggan sangat sering belanja).
+create temp table seed_map on commit drop as
+select t.id as sale_id,
+       case when k <= 10 then 1 when k <= 19 then 2 when k <= 22 then 3 when k <= 25 then 4 when k <= 28 then 5
+            when k <= 31 then 6 when k <= 34 then 7 when k <= 36 then 8 when k = 37 then 9 when k = 38 then 10
+            when k = 39 then 11 when k = 40 then 12 else 13 end as no
+from (select id, row_number() over (order by i) as k from seed_trx where i <= 70 and i % 5 in (0, 1, 2)) t
+union all
+select t.id, (array[15,15,16,16,17,17,18,18,19,19,20,20,3,1,2])[t.i - 70]
+from seed_trx t where t.i > 70;
+
+update sales s set customer_id = c.id, poin = poin_dari(s.total)
+from seed_map m join customers c on c.telepon = '62812000' || lpad(m.no::text, 4, '0')
+where s.id = m.sale_id;
+
+update customers c
+set poin = x.poin, total_belanja = x.tot, jumlah_transaksi = x.n, terakhir_belanja = x.terakhir, tier = tier_dari(x.tot)
+from (select customer_id, sum(poin)::int as poin, sum(total) as tot, count(*)::int as n, max(created_at) as terakhir
+      from sales where customer_id is not null group by customer_id) x
+where x.customer_id = c.id;
 
 commit;

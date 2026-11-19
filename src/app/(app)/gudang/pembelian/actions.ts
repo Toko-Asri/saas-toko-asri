@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { assertGudang } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { parseItemsPo } from '@/lib/po-items'
-import { kembali, pesanGalat, str } from '../_lib'
+import { kembali, pesanGalat, str } from '@/lib/form'
 
 export async function buatPo(fd: FormData) {
   await assertGudang()

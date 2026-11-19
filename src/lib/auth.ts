@@ -17,3 +17,9 @@ export async function assertGudang(): Promise<void> {
   const p = await getSessionProfile()
   if (!p || (p.peran !== 'pemilik' && p.peran !== 'staf_gudang')) throw new Error('Tidak diizinkan')
 }
+
+// Server Action pelanggan/kasir: RLS tetap pagar utama, ini memberi pesan galat yang jelas.
+export async function assertKasirAtauPemilik(): Promise<void> {
+  const p = await getSessionProfile()
+  if (!p || (p.peran !== 'pemilik' && p.peran !== 'kasir')) throw new Error('Tidak diizinkan')
+}

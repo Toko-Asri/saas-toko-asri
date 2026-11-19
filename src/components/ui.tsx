@@ -39,3 +39,10 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
     </div>
   )
 }
+
+const WARNA_TIER = { reguler: 'bg-slate-100 text-slate-700', silver: 'bg-sky-100 text-sky-800', gold: 'bg-amber-100 text-amber-800' } as const
+
+export function LencanaTier({ tier }: { tier: 'reguler' | 'silver' | 'gold' }) {
+  const label = { reguler: 'Reguler', silver: 'Silver', gold: 'Gold' }[tier]
+  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${WARNA_TIER[tier]}`}>{label}</span>
+}

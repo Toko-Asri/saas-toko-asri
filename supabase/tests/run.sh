@@ -12,5 +12,6 @@ $PSQL -f "$D/tests/00_auth_stub.sql" 2>/dev/null
 for m in "$D"/migrations/*.sql; do $PSQL -f "$m"; done
 $PSQL -f "$D/tests/scm_test.sql"
 $PSQL -f "$D/tests/erp_test.sql"
+$PSQL -f "$D/tests/crm_test.sql"
 $PSQL -f "$D/seed.sql"; $PSQL -f "$D/seed.sql"
 echo "SEED OK (idempoten)"

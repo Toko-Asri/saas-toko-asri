@@ -12,12 +12,12 @@ Logika bisnis yang kritis (penerimaan barang, saran pembelian, pembatalan PO) be
 |---|---|---|
 | 1 | **SCM**: pemasok, produk, batch/kedaluwarsa, pesanan pembelian, penerimaan barang, saran pembelian, login + peran | ✅ tersedia |
 | 2 | **ERP**: kasir/POS (FEFO), riwayat + struk, penyesuaian stok, laporan keuangan | ✅ tersedia |
-| 3 | CRM: pelanggan, riwayat belanja, poin & tier | ⏳ |
+| 3 | **CRM**: pelanggan, riwayat belanja, poin & tier, segmentasi, integrasi kasir | ✅ tersedia |
 | 4 | Integrasi + dashboard pemilik | ⏳ |
 
 ## Menjalankan aplikasi
 
-> Gunakan proyek Supabase **khusus demo**, bukan produksi. `supabase/seed.sql` **menghapus data SCM dan seluruh data transaksi yang ada (penjualan, penyesuaian stok)** sebelum mengisi data contoh. Jangan dijalankan ulang jika Anda sudah memasukkan data sendiri yang ingin dipertahankan.
+> Gunakan proyek Supabase **khusus demo**, bukan produksi. `supabase/seed.sql` **menghapus data SCM dan seluruh data transaksi serta pelanggan yang ada (penjualan, penyesuaian stok, pelanggan)** sebelum mengisi data contoh. Jangan dijalankan ulang jika Anda sudah memasukkan data sendiri yang ingin dipertahankan.
 
 ### 1. Membuat proyek di supabase.com
 
@@ -35,8 +35,8 @@ Pilih salah satu cara.
 **Cara A: SQL Editor (paling mudah)**
 
 1. Di dashboard buka **SQL Editor → New query**.
-2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (`20261119000100_scm_schema.sql`, `20261120000100_saran_diabaikan.sql`, `20261120000200_erp_schema.sql`, `20261120000300_erp_checkout.sql`, `20261120000400_erp_adjust_report.sql`, `20261120000500_erp_hardening.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan sebagian, cukup jalankan file yang belum dijalankan, dari yang paling awal.
-3. Buka query baru, salin isi `supabase/seed.sql`, **Run**. Ini mengisi 3 pemasok, 4 lokasi simpan, 17 produk, 20 batch (ada yang hampir/sudah kedaluwarsa), 3 saran pembelian, 2 PO contoh, **70 transaksi penjualan 30 hari terakhir**, dan 5 riwayat penyesuaian stok.
+2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (`20261119000100_scm_schema.sql`, `20261120000100_saran_diabaikan.sql`, `20261120000200_erp_schema.sql`, `20261120000300_erp_checkout.sql`, `20261120000400_erp_adjust_report.sql`, `20261120000500_erp_hardening.sql`, `20261120000600_crm_schema.sql`, `20261120000700_crm_checkout.sql`, `20261120000800_crm_riwayat.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan sebagian, cukup jalankan file yang belum dijalankan, dari yang paling awal.
+3. Buka query baru, salin isi `supabase/seed.sql`, **Run**. Ini mengisi 3 pemasok, 4 lokasi simpan, 17 produk, 20 batch (ada yang hampir/sudah kedaluwarsa), 3 saran pembelian, 2 PO contoh, **85 transaksi penjualan** (70 dalam 30 hari terakhir + 15 yang lebih lama untuk contoh pelanggan yang menjauh), 5 riwayat penyesuaian stok, dan **25 pelanggan fiktif** (2 Gold, 8 Silver, sisanya Reguler; sebagian aktif, berisiko, atau tidak aktif).
 
 **Cara B: Supabase CLI**
 
@@ -154,12 +154,52 @@ flowchart TD
     S --> R[Kerugian stok masuk laporan]
 ```
 
-Tahap berikutnya menambahkan CRM: transaksi memperbarui data pelanggan (poin, tier, riwayat belanja).
+## Fitur Tahap 3: modul CRM
+
+- **Data pelanggan**: nama, telepon/WhatsApp, email, alamat, catatan. Nomor telepon disimpan ternormalisasi (`0812-3456-7890`, `+62 812 3456 7890` dianggap nomor yang sama) dan unik. Pelanggan dinonaktifkan, tidak dihapus.
+- **Poin dan tier**: transaksi yang memilih pelanggan otomatis menambah poin, total belanja, jumlah transaksi, dan memperbarui tier **dalam transaksi database yang sama** dengan penjualan (kirim ulang tidak memberi poin dua kali; transaksi gagal tidak mengubah pelanggan).
+- **Kasir**: cari pelanggan (nama atau telepon), tambah pelanggan baru di tempat, perkiraan poin yang didapat, dan struk memuat pelanggan serta poin. Tanpa memilih pelanggan, transaksi dicatat sebagai tamu (tanpa poin).
+- **Detail pelanggan**: poin, bilah kemajuan ke tier berikutnya, riwayat belanja (semua kasir), produk favorit, tombol WhatsApp.
+- **Segmentasi (pemilik)**: tier × aktivitas, daftar yang dapat disaring, dan sorotan **Perlu dihubungi** (Silver/Gold yang berisiko atau tidak aktif) dengan pesan WhatsApp siap kirim.
+- Akses: `kasir` melihat, menambah, dan mengubah profil pelanggan (tidak dapat mengubah poin/tier dan tidak membuka segmentasi); `staf_gudang` tidak punya akses pelanggan; `pemilik` semuanya.
+
+| Aturan | Nilai |
+|---|---|
+| Poin | 1 poin per Rp10.000 per transaksi, dibulatkan ke bawah (Rp9.999 → 0, Rp19.999 → 1) |
+| Tier | Reguler < Rp500.000 ≤ Silver < Rp2.000.000 ≤ Gold (total belanja kumulatif; tidak pernah turun) |
+| Aktif | belanja terakhir ≤ 30 hari lalu |
+| Berisiko | 31–90 hari |
+| Tidak aktif | > 90 hari, atau belum pernah belanja dan terdaftar > 30 hari |
+| Baru | belum pernah belanja dan terdaftar ≤ 30 hari |
+
+Penukaran poin menjadi diskon belum ada (di luar cakupan tahap ini).
+
+## Alur proses bisnis (Tahap 3)
+
+```mermaid
+flowchart TD
+    A[Kasir menyelesaikan penjualan] --> B{Pelanggan dipilih?}
+    B -- tidak --> T[Transaksi tamu: tanpa poin]
+    B -- ya --> C[checkout mengunci baris pelanggan]
+    C --> D[Stok FEFO berkurang + penjualan tercatat]
+    D --> E[Poin = total / 10.000 dibulatkan ke bawah]
+    E --> F[Total belanja, jumlah transaksi, belanja terakhir diperbarui]
+    F --> G{Total belanja melewati batas?}
+    G -- ya --> H[Tier naik: Silver ≥ 500 rb, Gold ≥ 2 jt]
+    G -- tidak --> I[Tier tetap]
+    H --> J[Segmentasi: tier × aktivitas]
+    I --> J
+    J --> K{Silver/Gold berisiko atau tidak aktif?}
+    K -- ya --> L[Perlu dihubungi: pesan WhatsApp]
+    K -- tidak --> M[Pantau]
+```
+
+Tahap berikutnya (Tahap 4) menambahkan dashboard ringkasan untuk pemilik yang menyatukan SCM, ERP, dan CRM.
 
 ## Pengujian
 
 ```bash
-npm test          # uji unit (peran, format, kedaluwarsa, keranjang, periode, item PO)
+npm test          # uji unit (peran, format, kedaluwarsa, keranjang, periode, item PO, loyalitas, pelanggan, segmentasi)
 npm run build     # build produksi + type check
 ```
 
@@ -170,6 +210,7 @@ createdb asri_test
 PGDATABASE=asri_test supabase/tests/run.sh   # stub auth + migration + uji + seed dua kali
 PGDATABASE=asri_test supabase/tests/concurrency.sh   # uji konkurensi SCM (setelah run.sh)
 PGDATABASE=asri_test supabase/tests/erp_concurrency.sh   # uji konkurensi kasir (setelah run.sh)
+PGDATABASE=asri_test supabase/tests/crm_concurrency.sh   # uji konkurensi poin pelanggan (setelah run.sh)
 ```
 
 ## Struktur
