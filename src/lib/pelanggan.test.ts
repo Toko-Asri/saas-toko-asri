@@ -55,3 +55,30 @@ describe('polaTelepon', () => {
   })
   test('tanpa digit -> string kosong', () => expect(polaTelepon('ani')).toBe(''))
 })
+
+import { saringPelanggan } from './pelanggan'
+
+describe('saringPelanggan (pemilih di kasir)', () => {
+  const daftar = [
+    { id: '1', nama: 'Ani Wijaya', telepon: '628120000001' },
+    { id: '2', nama: 'Budi Santoso', telepon: '628120000002' },
+    { id: '3', nama: 'Anita Dewi', telepon: null },
+    ...Array.from({ length: 12 }, (_, i) => ({ id: `x${i}`, nama: `Rani ${i}`, telepon: `62899${String(i).padStart(7, '0')}` })),
+  ]
+  test('pencarian nama tidak peka huruf besar/kecil', () => {
+    expect(saringPelanggan(daftar, 'ANI').map((p) => p.id)).toEqual(expect.arrayContaining(['1', '3']))
+  })
+  test('pencarian telepon menerima format 0812…', () => {
+    expect(saringPelanggan(daftar, '0812-0000-002').map((p) => p.id)).toEqual(['2'])
+  })
+  test('hasil dibatasi 8 secara bawaan', () => {
+    expect(saringPelanggan(daftar, 'ani')).toHaveLength(8)
+  })
+  test('batas kustom', () => expect(saringPelanggan(daftar, 'ani', 2)).toHaveLength(2))
+  test('kata kunci kosong -> tidak ada hasil (kasir harus mengetik)', () => {
+    expect(saringPelanggan(daftar, '  ')).toEqual([])
+  })
+  test('telepon null tidak menyebabkan galat', () => {
+    expect(saringPelanggan(daftar, 'dewi').map((p) => p.id)).toEqual(['3'])
+  })
+})

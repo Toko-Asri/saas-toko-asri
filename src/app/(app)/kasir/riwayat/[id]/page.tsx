@@ -10,11 +10,12 @@ const waktu = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle:
 export default async function StrukPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: sale } = await supabase.from('sales').select('id, nomor, kasir_id, metode, total, bayar, kembalian, created_at').eq('id', id).maybeSingle()
+  const { data: sale } = await supabase.from('sales').select('id, nomor, kasir_id, customer_id, poin, metode, total, bayar, kembalian, created_at').eq('id', id).maybeSingle()
   if (!sale) notFound()
-  const [{ data: items }, { data: kasir }] = await Promise.all([
+  const [{ data: items }, { data: kasir }, { data: pelanggan }] = await Promise.all([
     supabase.from('sale_items').select('product_id, qty, harga_jual, products(nama)').eq('sale_id', id),
     sale.kasir_id ? supabase.from('profiles').select('nama').eq('id', sale.kasir_id).maybeSingle() : Promise.resolve({ data: null }),
+    sale.customer_id ? supabase.from('customers').select('nama, tier, poin').eq('id', sale.customer_id).maybeSingle() : Promise.resolve({ data: null }),
   ])
   // satu produk bisa terambil dari beberapa batch: gabungkan per produk + harga
   const baris = new Map<string, { nama: string; qty: number; harga: number }>()
@@ -40,6 +41,7 @@ export default async function StrukPage({ params }: { params: Promise<{ id: stri
           <div>No. #{sale.nomor}</div>
           <div>{waktu.format(new Date(sale.created_at))} WIB</div>
           {kasir?.nama && <div>Kasir: {kasir.nama}</div>}
+          {pelanggan && <div>Pelanggan: {pelanggan.nama} ({{ reguler: 'Reguler', silver: 'Silver', gold: 'Gold' }[pelanggan.tier as 'reguler']})</div>}
         </div>
         <table className="w-full">
           <tbody>
@@ -52,6 +54,10 @@ export default async function StrukPage({ params }: { params: Promise<{ id: stri
           <div className="flex justify-between font-bold"><span>Total</span><span>{formatRupiah(Number(sale.total))}</span></div>
           <div className="flex justify-between"><span>{NAMA_METODE[sale.metode]}</span><span>{formatRupiah(Number(sale.bayar))}</span></div>
           <div className="flex justify-between"><span>Kembalian</span><span>{formatRupiah(Number(sale.kembalian))}</span></div>
+          {pelanggan && (<>
+            <div className="flex justify-between border-t border-dashed pt-1"><span>Poin didapat</span><span>+{sale.poin}</span></div>
+            <div className="flex justify-between"><span>Total poin saat ini</span><span>{pelanggan.poin}</span></div>
+          </>)}
         </div>
         <p className="pt-2 text-center text-xs text-slate-500">Terima kasih sudah berbelanja!</p>
       </div>

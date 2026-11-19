@@ -30,3 +30,13 @@ export function polaTelepon(q: string): string {
   if (!d) return ''
   return d.startsWith('0') ? '62' + d.slice(1) : d
 }
+
+// Pencarian pelanggan di kasir: nama (tanpa peka huruf) atau telepon (format apa pun). Kosong -> tidak ada hasil.
+export function saringPelanggan<T extends { nama: string; telepon: string | null }>(daftar: T[], kata: string, batas = 8): T[] {
+  const q = kata.trim().toLowerCase()
+  if (!q) return []
+  const tel = polaTelepon(q)
+  return daftar
+    .filter((p) => p.nama.toLowerCase().includes(q) || (tel.length >= 3 && p.telepon !== null && p.telepon.includes(tel)))
+    .slice(0, batas)
+}
