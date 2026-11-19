@@ -71,5 +71,100 @@ select tst.as_user('00000000-0000-0000-0000-0000000000e3');
 select tst.assert((select count(*) from stock_adjustments) = 0, 'staf gudang boleh membaca penyesuaian (kosong)');
 reset role;
 
+
+-- ===== Task 2: checkout (FEFO, atomik, idempoten) =====
+insert into suppliers(id,nama) values ('55555555-0000-0000-0000-000000000002','Pemasok C');
+insert into products(id,sku,nama,satuan,supplier_id,harga_beli,harga_jual,min_stock,reorder_qty) values
+  ('99999999-0000-0000-0000-000000000001','PC','Produk C','pcs','55555555-0000-0000-0000-000000000002',6000,10000,5,20),
+  ('99999999-0000-0000-0000-000000000002','PD','Produk D','pcs','55555555-0000-0000-0000-000000000002',6000,10000,5,20),
+  ('99999999-0000-0000-0000-000000000003','PX','Produk Nonaktif','pcs','55555555-0000-0000-0000-000000000002',1,10,0,1);
+update products set aktif = false where id = '99999999-0000-0000-0000-000000000003';
+insert into batches(id,product_id,location_id,kode_batch,qty,tgl_kedaluwarsa,harga_beli) values
+  ('aaaaaaaa-0000-0000-0000-00000000000a','99999999-0000-0000-0000-000000000001','66666666-0000-0000-0000-000000000001','CA',3,(now() at time zone 'Asia/Jakarta')::date+5,5000),
+  ('aaaaaaaa-0000-0000-0000-00000000000b','99999999-0000-0000-0000-000000000001','66666666-0000-0000-0000-000000000001','CB',10,(now() at time zone 'Asia/Jakarta')::date+30,6000),
+  ('aaaaaaaa-0000-0000-0000-00000000000c','99999999-0000-0000-0000-000000000001','66666666-0000-0000-0000-000000000001','CC',50,(now() at time zone 'Asia/Jakarta')::date,1),
+  ('aaaaaaaa-0000-0000-0000-00000000000d','99999999-0000-0000-0000-000000000002','66666666-0000-0000-0000-000000000001','DA',8,(now() at time zone 'Asia/Jakarta')::date+30,6000);
+delete from purchase_suggestions where product_id in ('99999999-0000-0000-0000-000000000001','99999999-0000-0000-0000-000000000002');
+
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000e1');
+
+-- (a) FEFO lintas batch, batch kedaluwarsa hari ini tidak terpakai, HPP per batch, kembalian
+do $$ declare s uuid; begin
+  s := checkout('[{"product_id":"99999999-0000-0000-0000-000000000001","qty":4}]'::jsonb, 'tunai', 50000, gen_random_uuid());
+  perform tst.assert((select total from sales where id=s) = 40000, 'total 40000');
+  perform tst.assert((select kembalian from sales where id=s) = 10000, 'kembalian 10000');
+  perform tst.assert((select count(*) from sale_items where sale_id=s) = 2, 'dua baris item (dua batch)');
+  perform tst.assert((select qty from batches where kode_batch='CA' and product_id='99999999-0000-0000-0000-000000000001') = 0, 'batch A (kedaluwarsa terdekat) habis lebih dulu');
+  perform tst.assert((select qty from batches where kode_batch='CB' and product_id='99999999-0000-0000-0000-000000000001') = 9, 'batch B berkurang 1');
+  perform tst.assert((select qty from batches where kode_batch='CC' and product_id='99999999-0000-0000-0000-000000000001') = 50, 'batch kedaluwarsa hari ini tidak tersentuh');
+  perform tst.assert((select hpp_satuan from sale_items where sale_id=s and qty=3) = 5000, 'hpp batch A 5000');
+  perform tst.assert((select hpp_satuan from sale_items where sale_id=s and qty=1) = 6000, 'hpp batch B 6000');
+  perform tst.assert((select kasir_id from sales where id=s) = '00000000-0000-0000-0000-0000000000e1', 'kasir tercatat');
+end $$;
+
+-- (b) melebihi stok layak ditolak dan atomik (stok layak tersisa 9; 50 unit kedaluwarsa tidak boleh menutup kekurangan)
+do $$ declare n int; begin
+  select count(*) into n from sales;
+  perform tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000001","qty":10}]'::jsonb,'tunai',999999,gen_random_uuid())$q$, 'melebihi stok layak');
+  perform tst.assert((select count(*) from sales) = n, 'tidak ada transaksi baru');
+  perform tst.assert((select qty from batches where kode_batch='CB' and product_id='99999999-0000-0000-0000-000000000001') = 9, 'stok batch B tidak berubah');
+  perform tst.assert((select qty from batches where kode_batch='CC' and product_id='99999999-0000-0000-0000-000000000001') = 50, 'batch kedaluwarsa tidak berubah');
+  -- campuran: produk pertama cukup, produk kedua kurang -> tidak ada yang terpotong
+  perform tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":2},{"product_id":"99999999-0000-0000-0000-000000000001","qty":99}]'::jsonb,'tunai',9999999,gen_random_uuid())$q$, 'keranjang campuran');
+  perform tst.assert((select qty from batches where kode_batch='DA') = 8, 'produk D tidak terpotong sebagian');
+end $$;
+
+-- (c) tepat unit terakhir layak jual berhasil; setelah itu habis
+do $$ declare s uuid; begin
+  s := checkout('[{"product_id":"99999999-0000-0000-0000-000000000001","qty":9}]'::jsonb, 'tunai', 90000, gen_random_uuid());
+  perform tst.assert((select stok from stok_layak where product_id='99999999-0000-0000-0000-000000000001') is null, 'stok layak habis');
+  perform tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000001","qty":1}]'::jsonb,'tunai',10000,gen_random_uuid())$q$, 'jual lagi saat habis');
+end $$;
+
+-- (d) idempotensi + baris produk sama digabung
+do $$ declare k uuid := gen_random_uuid(); s1 uuid; s2 uuid; begin
+  s1 := checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1},{"product_id":"99999999-0000-0000-0000-000000000002","qty":2}]'::jsonb,'tunai',30000,k);
+  s2 := checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1},{"product_id":"99999999-0000-0000-0000-000000000002","qty":2}]'::jsonb,'tunai',30000,k);
+  perform tst.assert(s1 = s2, 'kunci sama mengembalikan transaksi yang sama');
+  perform tst.assert((select count(*) from sales where idempotency_key=k) = 1, 'satu baris sales');
+  perform tst.assert((select qty from batches where kode_batch='DA') = 5, 'stok berkurang sekali (8-3)');
+  perform tst.assert((select total from sales where id=s1) = 30000, 'baris sama digabung: 3 unit');
+end $$;
+
+-- integrasi SCM: stok D = 5 = min_stock -> tepat satu saran terbuka (dibaca sebagai superuser; kasir memang tidak boleh melihat saran)
+reset role;
+do $$ begin
+  perform tst.assert((select count(*) from purchase_suggestions where product_id='99999999-0000-0000-0000-000000000002' and status='terbuka') = 1, 'penjualan memicu saran pembelian');
+end $$;
+
+-- (e) harga snapshot saat checkout
+update batches set qty = 20 where kode_batch='DA';
+update products set harga_jual = 12000 where id='99999999-0000-0000-0000-000000000002';
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000e1');
+do $$ declare s uuid; begin
+  s := checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'tunai',12000,gen_random_uuid());
+  perform tst.assert((select harga_jual from sale_items where sale_id=s) = 12000, 'memakai harga saat checkout');
+  perform tst.assert((select count(*) from sale_items where harga_jual = 10000 and product_id='99999999-0000-0000-0000-000000000002') >= 1, 'baris lama tetap 10000');
+end $$;
+
+-- (f) validasi
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'tunai',11999,gen_random_uuid())$q$, 'bayar kurang dari total');
+select tst.expect_error($q$select checkout('[]'::jsonb,'tunai',0,gen_random_uuid())$q$, 'keranjang kosong');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":0}]'::jsonb,'tunai',0,gen_random_uuid())$q$, 'qty 0');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":-1}]'::jsonb,'tunai',0,gen_random_uuid())$q$, 'qty negatif');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1.5}]'::jsonb,'tunai',99999,gen_random_uuid())$q$, 'qty pecahan');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":0.5},{"product_id":"99999999-0000-0000-0000-000000000002","qty":0.5}]'::jsonb,'tunai',99999,gen_random_uuid())$q$, 'pecahan yang berjumlah bulat');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000003","qty":1}]'::jsonb,'tunai',99999,gen_random_uuid())$q$, 'produk nonaktif');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'kartu',99999,gen_random_uuid())$q$, 'metode tidak valid');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'qris',15000,gen_random_uuid())$q$, 'qris bayar harus sama dengan total');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'tunai',99999,null)$q$, 'kunci kosong');
+select tst.as_user('00000000-0000-0000-0000-0000000000e3');
+select tst.expect_error($q$select checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'tunai',99999,gen_random_uuid())$q$, 'staf gudang tidak boleh checkout');
+select tst.as_user('00000000-0000-0000-0000-0000000000e4');
+select tst.assert(checkout('[{"product_id":"99999999-0000-0000-0000-000000000002","qty":1}]'::jsonb,'qris',12000,gen_random_uuid()) is not null, 'pemilik boleh checkout');
+reset role;
+
 rollback;
 \echo 'SEMUA UJI ERP LULUS'
