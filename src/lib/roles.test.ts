@@ -59,8 +59,8 @@ describe('rute ERP (Tahap 2)', () => {
     expect(canAccess('kasir', '/kasirx')).toBe(false)
     expect(canAccess('kasir', '/laporanx')).toBe(false)
   })
-  test('menu kasir: Beranda, Kasir, Riwayat Penjualan', () => {
-    expect(menuFor('kasir').map((m) => m.href)).toEqual(['/', '/kasir', '/kasir/riwayat'])
+  test('menu kasir: Beranda, Kasir, Riwayat Penjualan, Pelanggan', () => {
+    expect(menuFor('kasir').map((m) => m.href)).toEqual(['/', '/kasir', '/kasir/riwayat', '/pelanggan'])
   })
   test('menu staf gudang memuat Penyesuaian Stok tanpa Laporan/Kasir', () => {
     const h = menuFor('staf_gudang').map((m) => m.href)
@@ -71,5 +71,33 @@ describe('rute ERP (Tahap 2)', () => {
   test('menu pemilik memuat Laporan Keuangan dan Kasir', () => {
     const h = menuFor('pemilik').map((m) => m.href)
     expect(h).toEqual(expect.arrayContaining(['/laporan', '/kasir', '/kasir/riwayat', '/gudang/penyesuaian']))
+  })
+})
+
+describe('rute CRM (Tahap 3)', () => {
+  test('kasir boleh /pelanggan dan detail pelanggan', () => {
+    expect(canAccess('kasir', '/pelanggan')).toBe(true)
+    expect(canAccess('kasir', '/pelanggan/abc-123')).toBe(true)
+  })
+  test('kasir tidak boleh segmentasi (termasuk sub-rutenya)', () => {
+    expect(canAccess('kasir', '/pelanggan/segmen')).toBe(false)
+    expect(canAccess('kasir', '/pelanggan/segmen/apa-saja')).toBe(false)
+  })
+  test('/pelanggansegmen dan /pelangganx bukan /pelanggan', () => {
+    expect(canAccess('kasir', '/pelangganx')).toBe(false)
+    expect(canAccess('pemilik', '/pelanggan/segmen')).toBe(true)
+  })
+  test('staf gudang tidak boleh pelanggan apa pun', () => {
+    expect(canAccess('staf_gudang', '/pelanggan')).toBe(false)
+    expect(canAccess('staf_gudang', '/pelanggan/abc')).toBe(false)
+    expect(canAccess('staf_gudang', '/pelanggan/segmen')).toBe(false)
+  })
+  test('menu kasir memuat Pelanggan tanpa Segmentasi; menu pemilik memuat keduanya; staf gudang tidak ada satu pun', () => {
+    const k = menuFor('kasir').map((m) => m.href)
+    expect(k).toContain('/pelanggan')
+    expect(k).not.toContain('/pelanggan/segmen')
+    const p = menuFor('pemilik').map((m) => m.href)
+    expect(p).toEqual(expect.arrayContaining(['/pelanggan', '/pelanggan/segmen']))
+    expect(menuFor('staf_gudang').some((m) => m.href.startsWith('/pelanggan'))).toBe(false)
   })
 })
