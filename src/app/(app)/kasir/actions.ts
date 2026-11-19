@@ -1,7 +1,7 @@
 'use server'
 import { getSessionProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { pesanGalat } from '../gudang/_lib'
+import { pesanGalat } from '@/lib/form'
 
 export type InputBayar = {
   items: { product_id: string; qty: number }[]

@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { assertGudang } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { kembali, pesanGalat, str } from '../_lib'
+import { kembali, pesanGalat, str } from '@/lib/form'
 
 const PATH = '/gudang/saran'
 
