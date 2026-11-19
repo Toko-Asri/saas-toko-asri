@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatRupiah, formatTanggal } from '@/lib/format'
 import { rentangPeriode, type KodePeriode } from '@/lib/periode'
 import { Banner, Card, PageHeader, Table } from '@/components/ui'
+import { GrafikHarian } from '@/components/grafik'
 
 const PILIHAN: { kode: KodePeriode; label: string }[] = [
   { kode: 'hari-ini', label: 'Hari ini' },
@@ -38,7 +39,6 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
   const rugi = jumlah((x) => x.kerugian_stok)
   const transaksi = jumlah((x) => x.jumlah_transaksi)
   const margin = penjualan > 0 ? (laba / penjualan) * 100 : 0
-  const maks = Math.max(1, ...hari.map((x) => x.penjualan))
 
   return (
     <div className="space-y-4">
@@ -58,21 +58,7 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
         <Card><div className="text-sm text-slate-500">Laba setelah kerugian stok</div><div className={`text-2xl font-bold ${laba - rugi < 0 ? 'text-red-700' : ''}`}>{formatRupiah(laba - rugi)}</div></Card>
       </div>
 
-      <Card>
-        <h2 className="mb-2 font-semibold">Penjualan dan laba kotor per hari</h2>
-        <div role="img" aria-label={`Grafik batang penjualan harian, total ${formatRupiah(penjualan)}`} className="flex h-40 items-end gap-1 overflow-x-auto">
-          {hari.map((x) => (
-            <div key={x.tanggal} className="flex min-w-3 flex-1 flex-col items-center justify-end" title={`${formatTanggal(x.tanggal)}: penjualan ${formatRupiah(x.penjualan)}, laba kotor ${formatRupiah(x.laba_kotor)}`}>
-              <div className="flex h-36 w-full items-end gap-px">
-                <div className="flex-1 rounded-t bg-sky-600" style={{ height: `${(x.penjualan / maks) * 100}%` }} />
-                <div className="flex-1 rounded-t bg-emerald-500" style={{ height: `${(Math.max(x.laba_kotor, 0) / maks) * 100}%` }} />
-              </div>
-              <div className="mt-1 text-[10px] text-slate-500">{x.tanggal.slice(8)}</div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-2 flex gap-4 text-xs text-slate-600"><span><span className="mr-1 inline-block h-2 w-2 bg-sky-600" />Penjualan</span><span><span className="mr-1 inline-block h-2 w-2 bg-emerald-500" />Laba kotor</span></div>
-      </Card>
+      <GrafikHarian data={hari} />
 
       <h2 className="text-lg font-semibold">Produk berdasarkan laba kotor</h2>
       <Table head={['Produk', 'Terjual', 'Penjualan', 'HPP', 'Laba kotor']}>

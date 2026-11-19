@@ -223,5 +223,36 @@ select tst.expect_error($q$select * from riwayat_pelanggan('d3000000-0000-0000-0
 select tst.expect_error($q$select * from produk_favorit_pelanggan('d3000000-0000-0000-0000-00000000000a')$q$, 'staf gudang favorit');
 reset role;
 
+
+-- ===== Tahap 4 / Task 7: telepon (normalisasi v2 + check) dan retry idempoten =====
+select tst.assert(normalisasi_telepon('0062 812-3456-7890') = '6281234567890', 'awalan 00 dibuang');
+select tst.assert(normalisasi_telepon('812-3456-7890') = '6281234567890', 'awalan 8 tanpa 0/62 diberi 62');
+select tst.assert(normalisasi_telepon('0812-3456-7890') = normalisasi_telepon('+62 812 3456 7890'), 'format lain tetap sama');
+select tst.assert(normalisasi_telepon('+62 812 3456 7890') = '6281234567890', '+62 tetap benar');
+select tst.expect_error($q$insert into customers(nama, telepon) values ('Dup 00', '0062 812 3456 7890')$q$, 'duplikat lintas format (00...)');
+select tst.expect_error($q$insert into customers(nama, telepon) values ('Dup 8', '812-3456-7890')$q$, 'duplikat lintas format (8...)');
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000c1');
+select tst.expect_error($q$insert into customers(nama, telepon) values ('Liar', 'abc1')$q$, 'telepon abc1 ditolak check');
+select tst.expect_error($q$insert into customers(nama, telepon) values ('Asing', '12345678')$q$, 'nomor bukan Indonesia ditolak check');
+select tst.expect_error($q$insert into customers(nama, telepon) values ('Pendek', '0812')$q$, 'nomor terlalu pendek ditolak check');
+reset role;
+
+-- retry idempoten sesudah pelanggan dinonaktifkan mengembalikan penjualan semula
+insert into customers(id,nama,telepon) values ('d3000000-0000-0000-0000-0000000000e1','Pelanggan Retry','62899000091');
+set local role authenticated;
+select tst.as_user('00000000-0000-0000-0000-0000000000c1');
+do $$ declare k uuid := gen_random_uuid(); s1 uuid; s2 uuid; poin_awal int; begin
+  s1 := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',25000,k,'d3000000-0000-0000-0000-0000000000e1');
+  select poin into poin_awal from customers where id='d3000000-0000-0000-0000-0000000000e1';
+  perform tst.sudo($q$update customers set aktif = false where id='d3000000-0000-0000-0000-0000000000e1'$q$);
+  s2 := checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',25000,k,'d3000000-0000-0000-0000-0000000000e1');
+  perform tst.assert(s1 = s2, 'retry setelah pelanggan dinonaktifkan mengembalikan penjualan semula');
+  perform tst.assert((select poin from customers where id='d3000000-0000-0000-0000-0000000000e1') = poin_awal, 'poin tidak bertambah lagi');
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',25000,%L,'d3000000-0000-0000-0000-0000000000e1')$f$, gen_random_uuid()), 'penjualan BARU ke pelanggan nonaktif tetap ditolak');
+  perform tst.expect_error(format($f$select checkout('[{"product_id":"d2000000-0000-0000-0000-000000000001","qty":2}]'::jsonb,'tunai',25000,%L,'d3000000-0000-0000-0000-00000000000a')$f$, k), 'kunci sama dengan pelanggan lain tetap ditolak');
+end $$;
+reset role;
+
 rollback;
 \echo 'SEMUA UJI CRM LULUS'

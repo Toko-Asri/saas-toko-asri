@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { bersihkanPencarian, polaTelepon, validasiPelanggan } from './pelanggan'
+import { bersihkanPencarian, normalisasiTelepon, polaTelepon, validasiPelanggan } from './pelanggan'
 
 const dasar = { nama: 'Ani Wijaya', telepon: '', email: '', alamat: '', catatan: '' }
 
@@ -80,5 +80,30 @@ describe('saringPelanggan (pemilih di kasir)', () => {
   })
   test('telepon null tidak menyebabkan galat', () => {
     expect(saringPelanggan(daftar, 'dewi').map((p) => p.id)).toEqual(['3'])
+  })
+})
+
+// Tabel yang sama dengan supabase/tests/crm_test.sql (normalisasi_telepon v2)
+describe('normalisasiTelepon (cermin SQL)', () => {
+  test.each([
+    ['0812-3456-7890', '6281234567890'],
+    ['+62 812 3456 7890', '6281234567890'],
+    ['62 812-3456-7890', '6281234567890'],
+    ['0062 812-3456-7890', '6281234567890'],
+    ['812-3456-7890', '6281234567890'],
+  ])('%s -> %s', (masuk, harap) => expect(normalisasiTelepon(masuk)).toBe(harap))
+  test('kosong -> null, tanpa digit -> null', () => {
+    expect(normalisasiTelepon('  ')).toBeNull()
+    expect(normalisasiTelepon('abc')).toBeNull()
+  })
+})
+
+describe('validasiPelanggan: nomor harus nomor Indonesia', () => {
+  test('nomor asing atau tanpa awalan Indonesia ditolak dengan pesan jelas', () => {
+    expect(validasiPelanggan({ nama: 'A', telepon: '1234567890', email: '', alamat: '', catatan: '' }).error).toMatch(/Indonesia/)
+  })
+  test('format 812... dan 0062... diterima', () => {
+    expect(validasiPelanggan({ nama: 'A', telepon: '812-3456-7890', email: '', alamat: '', catatan: '' }).error).toBeUndefined()
+    expect(validasiPelanggan({ nama: 'A', telepon: '0062 812 3456 7890', email: '', alamat: '', catatan: '' }).error).toBeUndefined()
   })
 })
