@@ -1,0 +1,92 @@
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
+import { formatRupiah, formatTanggal } from '@/lib/format'
+import { rentangPeriode, type KodePeriode } from '@/lib/periode'
+import { Banner, Card, PageHeader, Table } from '@/components/ui'
+
+const PILIHAN: { kode: KodePeriode; label: string }[] = [
+  { kode: 'hari-ini', label: 'Hari ini' },
+  { kode: '7-hari', label: '7 hari' },
+  { kode: '30-hari', label: '30 hari' },
+  { kode: 'bulan-ini', label: 'Bulan ini' },
+]
+
+type Hari = { tanggal: string; jumlah_transaksi: number; penjualan: number; hpp: number; laba_kotor: number; kerugian_stok: number }
+type ProdukLaporan = { product_id: string; nama: string; qty_terjual: number; penjualan: number; hpp: number; laba_kotor: number }
+
+export default async function LaporanPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
+  const { p } = await searchParams
+  const kode: KodePeriode = PILIHAN.some((x) => x.kode === p) ? (p as KodePeriode) : '7-hari'
+  const { dari, sampai } = rentangPeriode(kode)
+  const supabase = await createClient()
+  const [h, pr] = await Promise.all([
+    supabase.rpc('laporan_keuangan', { p_dari: dari, p_sampai: sampai }),
+    supabase.rpc('laporan_produk', { p_dari: dari, p_sampai: sampai }),
+  ])
+  const galat = h.error?.message ?? pr.error?.message
+  const hari: Hari[] = ((h.data as Hari[] | null) ?? []).map((x) => ({
+    ...x, penjualan: Number(x.penjualan), hpp: Number(x.hpp), laba_kotor: Number(x.laba_kotor), kerugian_stok: Number(x.kerugian_stok),
+  }))
+  const produk: ProdukLaporan[] = ((pr.data as ProdukLaporan[] | null) ?? []).map((x) => ({
+    ...x, qty_terjual: Number(x.qty_terjual), penjualan: Number(x.penjualan), hpp: Number(x.hpp), laba_kotor: Number(x.laba_kotor),
+  }))
+
+  const jumlah = (f: (x: Hari) => number) => hari.reduce((a, x) => a + f(x), 0)
+  const penjualan = jumlah((x) => x.penjualan)
+  const hpp = jumlah((x) => x.hpp)
+  const laba = penjualan - hpp
+  const rugi = jumlah((x) => x.kerugian_stok)
+  const transaksi = jumlah((x) => x.jumlah_transaksi)
+  const margin = penjualan > 0 ? (laba / penjualan) * 100 : 0
+  const maks = Math.max(1, ...hari.map((x) => x.penjualan))
+
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Laporan Keuangan" subtitle={`${dari === sampai ? formatTanggal(dari) : `${formatTanggal(dari)} s/d ${formatTanggal(sampai)}`} (WIB) · laba kotor = penjualan − HPP`} />
+      <div className="flex gap-2">
+        {PILIHAN.map((x) => (
+          <Link key={x.kode} href={`/laporan?p=${x.kode}`}
+            className={`rounded-full border px-3 py-1 text-xs ${kode === x.kode ? 'bg-sky-700 text-white' : 'bg-white hover:bg-slate-50'}`}>{x.label}</Link>
+        ))}
+      </div>
+      <Banner error={galat} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Card><div className="text-sm text-slate-500">Penjualan ({transaksi} transaksi)</div><div className="text-2xl font-bold">{formatRupiah(penjualan)}</div></Card>
+        <Card><div className="text-sm text-slate-500">HPP (harga pokok penjualan)</div><div className="text-2xl font-bold">{formatRupiah(hpp)}</div></Card>
+        <Card><div className="text-sm text-slate-500">Laba kotor · margin {margin.toFixed(1)}%</div><div className="text-2xl font-bold text-emerald-700">{formatRupiah(laba)}</div></Card>
+        <Card><div className="text-sm text-slate-500">Kerugian stok (rusak, kedaluwarsa, hilang)</div><div className="text-2xl font-bold text-red-700">{formatRupiah(rugi)}</div></Card>
+        <Card><div className="text-sm text-slate-500">Laba setelah kerugian stok</div><div className={`text-2xl font-bold ${laba - rugi < 0 ? 'text-red-700' : ''}`}>{formatRupiah(laba - rugi)}</div></Card>
+      </div>
+
+      <Card>
+        <h2 className="mb-2 font-semibold">Penjualan dan laba kotor per hari</h2>
+        <div role="img" aria-label={`Grafik batang penjualan harian, total ${formatRupiah(penjualan)}`} className="flex h-40 items-end gap-1 overflow-x-auto">
+          {hari.map((x) => (
+            <div key={x.tanggal} className="flex min-w-3 flex-1 flex-col items-center justify-end" title={`${formatTanggal(x.tanggal)}: penjualan ${formatRupiah(x.penjualan)}, laba kotor ${formatRupiah(x.laba_kotor)}`}>
+              <div className="flex h-36 w-full items-end gap-px">
+                <div className="flex-1 rounded-t bg-sky-600" style={{ height: `${(x.penjualan / maks) * 100}%` }} />
+                <div className="flex-1 rounded-t bg-emerald-500" style={{ height: `${(Math.max(x.laba_kotor, 0) / maks) * 100}%` }} />
+              </div>
+              <div className="mt-1 text-[10px] text-slate-500">{x.tanggal.slice(8)}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex gap-4 text-xs text-slate-600"><span><span className="mr-1 inline-block h-2 w-2 bg-sky-600" />Penjualan</span><span><span className="mr-1 inline-block h-2 w-2 bg-emerald-500" />Laba kotor</span></div>
+      </Card>
+
+      <h2 className="text-lg font-semibold">Produk berdasarkan laba kotor</h2>
+      <Table head={['Produk', 'Terjual', 'Penjualan', 'HPP', 'Laba kotor']}>
+        {produk.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">Belum ada penjualan pada periode ini.</td></tr>}
+        {produk.slice(0, 10).map((x) => (
+          <tr key={x.product_id}>
+            <td className="px-3 py-2 font-medium">{x.nama}</td>
+            <td className="px-3 py-2">{x.qty_terjual}</td>
+            <td className="px-3 py-2">{formatRupiah(x.penjualan)}</td>
+            <td className="px-3 py-2">{formatRupiah(x.hpp)}</td>
+            <td className="px-3 py-2 font-semibold text-emerald-700">{formatRupiah(x.laba_kotor)}</td>
+          </tr>
+        ))}
+      </Table>
+    </div>
+  )
+}
