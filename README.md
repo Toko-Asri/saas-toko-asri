@@ -142,6 +142,7 @@ Uji skema database (butuh Postgres lokal, **bukan** Supabase Anda):
 ```bash
 createdb asri_test
 PGDATABASE=asri_test supabase/tests/run.sh   # stub auth + migration + uji + seed dua kali
+PGDATABASE=asri_test supabase/tests/concurrency.sh   # uji konkurensi (setelah run.sh)
 ```
 
 ## Struktur

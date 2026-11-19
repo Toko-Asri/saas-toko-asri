@@ -115,11 +115,13 @@ create policy batches_tulis on batches for all using (current_peran() in ('pemil
 
 -- hanya pemilik/staf gudang
 create policy suppliers_semua on suppliers for all using (current_peran() in ('pemilik', 'staf_gudang')) with check (current_peran() in ('pemilik', 'staf_gudang'));
-create policy po_semua on purchase_orders for all using (current_peran() in ('pemilik', 'staf_gudang')) with check (current_peran() in ('pemilik', 'staf_gudang'));
-create policy po_items_semua on purchase_order_items for all using (current_peran() in ('pemilik', 'staf_gudang')) with check (current_peran() in ('pemilik', 'staf_gudang'));
+-- PO dan itemnya hanya dibaca langsung; perubahan lewat RPC (create_po, set_po_status, receive_goods)
+create policy po_baca on purchase_orders for select using (current_peran() in ('pemilik', 'staf_gudang'));
+create policy po_items_baca on purchase_order_items for select using (current_peran() in ('pemilik', 'staf_gudang'));
 create policy saran_semua on purchase_suggestions for all using (current_peran() in ('pemilik', 'staf_gudang')) with check (current_peran() in ('pemilik', 'staf_gudang'));
 
 grant select, insert, update, delete on all tables in schema public to authenticated;
+revoke insert, update, delete on purchase_orders, purchase_order_items from authenticated;
 
 -- ---------- Saran pembelian ----------
 create function refresh_suggestion(p_product uuid) returns void
@@ -133,7 +135,8 @@ begin
   if v_aktif and v_stock <= v_min then
     insert into purchase_suggestions (product_id, qty_disarankan)
     select p_product, v_reorder
-    where not exists (select 1 from purchase_suggestions where product_id = p_product and status in ('terbuka', 'dipesan'));
+    where not exists (select 1 from purchase_suggestions where product_id = p_product and status in ('terbuka', 'dipesan'))
+    on conflict do nothing;  -- transaksi bersamaan: indeks unik one_open_suggestion menjadi pagar terakhir
   elsif v_stock > v_min or not v_aktif then
     update purchase_suggestions set status = 'selesai' where product_id = p_product and status = 'terbuka';
   end if;
@@ -194,6 +197,21 @@ begin
   return v_po;
 end $$;
 
+create function set_po_status(p_po uuid, p_status text) returns void
+language plpgsql security definer set search_path = public as
+$$
+declare v_status text;
+begin
+  perform require_gudang();
+  select status into v_status from purchase_orders where id = p_po for update;
+  if not found then raise exception 'PO tidak ditemukan'; end if;
+  if not ((v_status = 'draft' and p_status in ('dipesan', 'dibatalkan'))
+       or (v_status = 'dipesan' and p_status = 'dibatalkan')) then
+    raise exception 'Perubahan status dari % ke % tidak diizinkan', v_status, p_status;
+  end if;
+  update purchase_orders set status = p_status where id = p_po;
+end $$;
+
 create function receive_goods(p_po uuid, p_items jsonb) returns void
 language plpgsql security definer set search_path = public as
 $$
@@ -215,8 +233,9 @@ begin
     if v_qty > v_item.qty_pesan - v_item.qty_diterima then
       raise exception 'Jumlah diterima melebihi sisa pesanan (sisa %)', v_item.qty_pesan - v_item.qty_diterima;
     end if;
-    if (it ->> 'tgl_kedaluwarsa') is null or (it ->> 'tgl_kedaluwarsa')::date < current_date then
-      raise exception 'Tanggal kedaluwarsa wajib diisi dan tidak boleh sudah lewat';
+    if (it ->> 'tgl_kedaluwarsa') is null
+       or (it ->> 'tgl_kedaluwarsa')::date <= (now() at time zone 'Asia/Jakarta')::date then
+      raise exception 'Tanggal kedaluwarsa wajib diisi dan harus setelah hari ini (WIB)';
     end if;
     insert into batches (product_id, location_id, kode_batch, qty, tgl_kedaluwarsa)
     values (v_item.product_id, (it ->> 'location_id')::uuid, it ->> 'kode_batch', v_qty, (it ->> 'tgl_kedaluwarsa')::date);
@@ -225,6 +244,8 @@ begin
   if not exists (select 1 from purchase_order_items where po_id = p_po and qty_diterima < qty_pesan) then
     update purchase_orders set status = 'diterima' where id = p_po;
     update purchase_suggestions set status = 'selesai' where po_id = p_po and status = 'dipesan';
+    -- stok bisa masih <= minimum setelah penerimaan: periksa ulang agar saran baru muncul
+    perform refresh_suggestion(product_id) from purchase_order_items where po_id = p_po;
   end if;
 end $$;
 
@@ -245,5 +266,5 @@ create trigger po_batal after update of status on purchase_orders
 
 revoke all on function require_gudang(), refresh_suggestion(uuid), trg_po_batal() from public, anon, authenticated;
 revoke all on function current_peran(),
-  create_po(uuid, jsonb), create_po_from_suggestion(uuid), receive_goods(uuid, jsonb) from public, anon;
-grant execute on function current_peran(), create_po(uuid, jsonb), create_po_from_suggestion(uuid), receive_goods(uuid, jsonb) to authenticated;
+  create_po(uuid, jsonb), create_po_from_suggestion(uuid), set_po_status(uuid, text), receive_goods(uuid, jsonb) from public, anon;
+grant execute on function current_peran(), create_po(uuid, jsonb), create_po_from_suggestion(uuid), set_po_status(uuid, text), receive_goods(uuid, jsonb) to authenticated;

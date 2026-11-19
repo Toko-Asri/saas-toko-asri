@@ -26,17 +26,14 @@ export async function buatPo(fd: FormData) {
   redirect(`/gudang/pembelian/${data}?ok=${encodeURIComponent('PO draft dibuat')}`)
 }
 
-const TRANSISI: Record<string, string[]> = { draft: ['dipesan', 'dibatalkan'], dipesan: ['dibatalkan'] }
-
 export async function ubahStatusPo(fd: FormData) {
   await assertGudang()
   const id = str(fd, 'id')
   const ke = str(fd, 'status')
   const path = `/gudang/pembelian/${id}`
   const supabase = await createClient()
-  const { data: po } = await supabase.from('purchase_orders').select('status').eq('id', id).maybeSingle()
-  if (!po || !(TRANSISI[po.status] ?? []).includes(ke)) kembali(path, { error: 'Perubahan status tidak diizinkan' })
-  const { error } = await supabase.from('purchase_orders').update({ status: ke }).eq('id', id)
+  // Aturan transisi status ditegakkan di database (RPC set_po_status).
+  const { error } = await supabase.rpc('set_po_status', { p_po: id, p_status: ke })
   if (error) kembali(path, { error: pesanGalat(error) })
   revalidatePath(path)
   revalidatePath('/gudang/pembelian')

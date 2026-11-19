@@ -41,7 +41,7 @@ do $$ declare po uuid; it uuid; begin
   select id into it from purchase_order_items where po_id = po;
   perform tst.expect_error(format($f$select receive_goods(%L,%L::jsonb)$f$, po,
     format('[{"item_id":"%s","qty":20,"location_id":"22222222-0000-0000-0000-000000000001","kode_batch":"B1","tgl_kedaluwarsa":"2099-01-01"}]', it)), 'terima PO draft');
-  update purchase_orders set status='dipesan' where id = po;
+  perform set_po_status(po,'dipesan');
   perform receive_goods(po, format('[{"item_id":"%s","qty":20,"location_id":"22222222-0000-0000-0000-000000000001","kode_batch":"B1","tgl_kedaluwarsa":"2099-01-01"}]', it)::jsonb);
   perform tst.assert((select sum(qty) from batches where product_id='33333333-0000-0000-0000-000000000001') = 20, 'batch 20 terbentuk');
   perform tst.assert((select status from purchase_orders where id=po) = 'diterima', 'PO diterima');
@@ -55,7 +55,7 @@ end $$;
 do $$ declare po uuid; it uuid; loc text := '22222222-0000-0000-0000-000000000001'; begin
   po := create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000002","qty":5,"harga_beli":1000}]'::jsonb);
   select id into it from purchase_order_items where po_id = po;
-  update purchase_orders set status='dipesan' where id = po;
+  perform set_po_status(po,'dipesan');
   perform tst.expect_error(format($f$select receive_goods(%L,%L::jsonb)$f$, po,
     format('[{"item_id":"%s","qty":6,"location_id":"%s","kode_batch":"X","tgl_kedaluwarsa":"2099-01-01"}]', it, loc)), 'lebih dari pesanan');
   perform receive_goods(po, format('[{"item_id":"%s","qty":3,"location_id":"%s","kode_batch":"X1","tgl_kedaluwarsa":"2099-01-01"}]', it, loc)::jsonb);
@@ -104,14 +104,46 @@ end $$;
 do $$ declare sid uuid; po uuid; po2 uuid; it uuid; begin
   select id into sid from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000001' and status='dipesan';
   select po_id into po from purchase_suggestions where id = sid;
-  update purchase_orders set status='dibatalkan' where id = po;
+  perform set_po_status(po,'dibatalkan');
   perform tst.assert((select status from purchase_suggestions where id=sid) = 'terbuka', 'saran kembali terbuka setelah PO batal');
   perform tst.assert((select po_id from purchase_suggestions where id=sid) is null, 'po_id saran dikosongkan');
   po2 := create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000001","qty":9,"harga_beli":1000}]'::jsonb);
   select id into it from purchase_order_items where po_id = po2;
-  update purchase_orders set status='dipesan' where id = po2;
+  perform set_po_status(po2,'dipesan');
   perform receive_goods(po2, format('[{"item_id":"%s","qty":2,"location_id":"22222222-0000-0000-0000-000000000001","kode_batch":"PB1","tgl_kedaluwarsa":"2099-01-01"}]', it)::jsonb);
-  perform tst.expect_error(format($f$update purchase_orders set status='dibatalkan' where id=%L$f$, po2), 'batal PO yang sudah menerima barang');
+  perform tst.expect_error(format($f$select set_po_status(%L,'dibatalkan')$f$, po2), 'batal PO yang sudah menerima barang');
+end $$;
+
+-- (k) I-2: setelah PO dari saran diterima tapi stok masih <= min, saran baru langsung muncul
+do $$ declare sid uuid; po uuid; it uuid; begin
+  insert into products(id,sku,nama,satuan,supplier_id,min_stock,reorder_qty) values ('33333333-0000-0000-0000-000000000004','P4','Produk 4','pcs','11111111-0000-0000-0000-000000000001',30,10);
+  select id into sid from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000004' and status='terbuka';
+  po := create_po_from_suggestion(sid);
+  perform set_po_status(po,'dipesan');
+  select id into it from purchase_order_items where po_id = po;
+  perform receive_goods(po, format('[{"item_id":"%s","qty":10,"location_id":"22222222-0000-0000-0000-000000000001","kode_batch":"K1","tgl_kedaluwarsa":"2099-01-01"}]', it)::jsonb);
+  perform tst.assert((select count(*) from purchase_suggestions where product_id='33333333-0000-0000-0000-000000000004' and status='terbuka') = 1, 'stok 10 <= min 30 setelah terima: saran baru terbuka');
+end $$;
+
+-- (l) I-3: kedaluwarsa hari ini (tanggal Jakarta) ditolak saat penerimaan
+do $$ declare po uuid; it uuid; begin
+  po := create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000001","qty":3,"harga_beli":1000}]'::jsonb);
+  perform set_po_status(po,'dipesan');
+  select id into it from purchase_order_items where po_id = po;
+  perform tst.expect_error(format($f$select receive_goods(%L,%L::jsonb)$f$, po,
+    format('[{"item_id":"%s","qty":1,"location_id":"22222222-0000-0000-0000-000000000001","kode_batch":"L1","tgl_kedaluwarsa":"%s"}]', it, (now() at time zone 'Asia/Jakarta')::date)), 'kedaluwarsa hari ini');
+  perform receive_goods(po, format('[{"item_id":"%s","qty":1,"location_id":"22222222-0000-0000-0000-000000000001","kode_batch":"L2","tgl_kedaluwarsa":"%s"}]', it, (now() at time zone 'Asia/Jakarta')::date + 1)::jsonb);
+end $$;
+
+-- (m) I-4: aturan status PO dan penerimaan tidak bisa dilewati lewat tulis tabel langsung
+do $$ declare po uuid; it uuid; begin
+  po := create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000001","qty":4,"harga_beli":1000}]'::jsonb);
+  select id into it from purchase_order_items where po_id = po;
+  perform tst.expect_error(format($f$update purchase_orders set status='dipesan' where id=%L$f$, po), 'update status langsung');
+  perform tst.expect_error(format($f$update purchase_order_items set qty_diterima=qty_pesan where id=%L$f$, it), 'qty_diterima langsung');
+  perform tst.expect_error(format($f$select set_po_status(%L,'diterima')$f$, po), 'draft -> diterima');
+  perform set_po_status(po,'dibatalkan');
+  perform tst.expect_error(format($f$select set_po_status(%L,'dipesan')$f$, po), 'dibatalkan -> dipesan');
 end $$;
 
 -- (h) RLS: kasir
@@ -120,7 +152,7 @@ select tst.expect_error($q$insert into suppliers(nama) values ('X')$q$, 'kasir t
 select tst.expect_error($q$select receive_goods('11111111-0000-0000-0000-000000000009','[]'::jsonb)$q$, 'kasir receive_goods');
 select tst.expect_error($q$select create_po('11111111-0000-0000-0000-000000000001','[{"product_id":"33333333-0000-0000-0000-000000000001","qty":1,"harga_beli":1}]'::jsonb)$q$, 'kasir create_po');
 select tst.assert((select count(*) from batches) > 0, 'kasir boleh baca batch');
-select tst.assert((select count(*) from products) = 3, 'kasir boleh baca produk');
+select tst.assert((select count(*) from products) = 4, 'kasir boleh baca produk');
 select tst.assert((select count(*) from purchase_orders) = 0, 'kasir tidak lihat PO');
 
 -- (i) staf gudang tidak bisa menaikkan perannya sendiri
