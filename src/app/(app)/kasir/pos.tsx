@@ -151,6 +151,7 @@ export function Pos({ produk, pelanggan }: { produk: ProdukPos[]; pelanggan: Pel
             </div>
           ) : (
             <>
+              {pelangganId && <p role="alert" className="rounded bg-amber-50 p-2 text-xs text-amber-800">Pelanggan yang dipilih tidak lagi tersedia (mungkin dinonaktifkan). Pilih pelanggan lain, atau lanjutkan sebagai tamu.</p>}
               <input value={cariPelanggan} onChange={(e) => setCariPelanggan(e.target.value)} placeholder="Cari nama atau telepon… (kosong = tamu)" className={inputCls} aria-label="Cari pelanggan" />
               {hasilCari.length > 0 && (
                 <ul className="divide-y rounded border bg-white">
