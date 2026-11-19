@@ -19,5 +19,6 @@ export function pesanGalat(e: { code?: string; message?: string } | null): strin
   if (e.code === '23505') return 'Data sudah ada (nilai unik duplikat)'
   if (e.code === '23503') return 'Data masih digunakan di tempat lain'
   if (e.code === '42501') return 'Anda tidak berhak melakukan tindakan ini'
+  if (e.code === '23514') return /telepon/i.test(e.message ?? '') ? 'Nomor telepon harus nomor Indonesia (mis. 0812…, +62 812…)' : 'Data tidak memenuhi aturan yang berlaku'
   return e.message ?? 'Terjadi kesalahan'
 }
