@@ -11,7 +11,7 @@ Logika bisnis yang kritis (penerimaan barang, saran pembelian, pembatalan PO) be
 | Tahap | Modul | Status |
 |---|---|---|
 | 1 | **SCM**: pemasok, produk, batch/kedaluwarsa, pesanan pembelian, penerimaan barang, saran pembelian, login + peran | ✅ tersedia |
-| 2 | ERP: kasir/POS (FEFO), keuangan sederhana, penyesuaian stok | ⏳ berikutnya |
+| 2 | **ERP**: kasir/POS (FEFO), riwayat + struk, penyesuaian stok, laporan keuangan | ✅ tersedia |
 | 3 | CRM: pelanggan, riwayat belanja, poin & tier | ⏳ |
 | 4 | Integrasi + dashboard pemilik | ⏳ |
 
@@ -35,7 +35,7 @@ Pilih salah satu cara.
 **Cara A: SQL Editor (paling mudah)**
 
 1. Di dashboard buka **SQL Editor → New query**.
-2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (saat ini `20261119000100_scm_schema.sql`, lalu `20261120000100_saran_diabaikan.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan file pertama, cukup jalankan file yang baru.
+2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (`20261119000100_scm_schema.sql`, `20261120000100_saran_diabaikan.sql`, `20261120000200_erp_schema.sql`, `20261120000300_erp_checkout.sql`, `20261120000400_erp_adjust_report.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan sebagian, cukup jalankan file yang belum dijalankan, dari yang paling awal.
 3. Buka query baru, salin isi `supabase/seed.sql`, **Run**. Ini mengisi 3 pemasok, 4 lokasi simpan, 17 produk, 20 batch (ada yang hampir/sudah kedaluwarsa), 3 saran pembelian, dan 2 PO contoh.
 
 **Cara B: Supabase CLI**
@@ -128,12 +128,38 @@ flowchart TD
     I --> A
 ```
 
-Tahap berikutnya menambahkan: penjualan mengurangi stok per batch (FEFO), stok menipis memicu saran, dan transaksi memperbarui data pelanggan.
+## Fitur Tahap 2: modul ERP
+
+- **Kasir (POS)**: cari produk, keranjang, metode tunai/QRIS/transfer, hitung kembalian. Stok diambil otomatis per batch dengan aturan **FEFO** (kedaluwarsa terdekat lebih dulu); batch yang sudah kedaluwarsa tidak pernah terjual. Harga dan HPP dibaca server saat transaksi (snapshot di struk). Klik ganda atau kirim ulang tidak membuat transaksi ganda (kunci idempotensi). Dua kasir yang menjual unit terakhir bersamaan: satu berhasil, satu ditolak.
+- **Struk dan riwayat penjualan**: struk dapat dicetak; kasir hanya melihat penjualannya sendiri, pemilik melihat semua.
+- **Penyesuaian stok**: rusak, kedaluwarsa (buang), hilang, atau koreksi stok opname. Stok hanya boleh bertambah dengan alasan *koreksi*; setiap perubahan tercatat beserta nilai kerugiannya.
+- **Laporan keuangan (pemilik)**: penjualan, HPP, laba kotor, margin, kerugian stok, grafik harian, dan produk berdasarkan laba. HPP dihitung dari biaya per batch (harga di PO saat barang diterima).
+- **Integrasi dengan SCM**: setiap penjualan dan penyesuaian yang menurunkan stok ke batas minimum otomatis memunculkan **saran pembelian**.
+- Akses: `kasir` hanya kasir dan riwayat miliknya; `staf_gudang` gudang dan penyesuaian stok tanpa penjualan/laporan; `pemilik` semuanya.
+
+## Alur proses bisnis (Tahap 2)
+
+```mermaid
+flowchart TD
+    A[Kasir memilih produk dan metode bayar] --> B[checkout: validasi keranjang dan pembayaran]
+    B -- stok layak tidak cukup / bayar kurang --> X[Ditolak, tidak ada perubahan]
+    B --> C[Ambil stok per batch urut kedaluwarsa FEFO<br/>lewati batch kedaluwarsa]
+    C --> D[Catat penjualan + item per batch<br/>harga jual dan HPP disimpan]
+    D --> E[Stok batch berkurang]
+    E --> F{Total stok ≤ stok minimum?}
+    F -- ya --> G[Saran pembelian otomatis → PO ke pemasok]
+    F -- tidak --> H[Selesai: struk dicetak]
+    D --> L[Laporan keuangan: penjualan, HPP, laba kotor]
+    S[Penyesuaian stok: rusak/kedaluwarsa/hilang/koreksi] --> E
+    S --> R[Kerugian stok masuk laporan]
+```
+
+Tahap berikutnya menambahkan CRM: transaksi memperbarui data pelanggan (poin, tier, riwayat belanja).
 
 ## Pengujian
 
 ```bash
-npm test          # uji unit (peran, format, kedaluwarsa)
+npm test          # uji unit (peran, format, kedaluwarsa, keranjang, periode, item PO)
 npm run build     # build produksi + type check
 ```
 
@@ -142,7 +168,8 @@ Uji skema database (butuh Postgres lokal, **bukan** Supabase Anda):
 ```bash
 createdb asri_test
 PGDATABASE=asri_test supabase/tests/run.sh   # stub auth + migration + uji + seed dua kali
-PGDATABASE=asri_test supabase/tests/concurrency.sh   # uji konkurensi (setelah run.sh)
+PGDATABASE=asri_test supabase/tests/concurrency.sh   # uji konkurensi SCM (setelah run.sh)
+PGDATABASE=asri_test supabase/tests/erp_concurrency.sh   # uji konkurensi kasir (setelah run.sh)
 ```
 
 ## Struktur
