@@ -3,8 +3,9 @@
 Sistem informasi terpadu **ERP + SCM + CRM** untuk toko retail frozen food (tugas akhir mata kuliah SIM).
 Dibangun dengan **Next.js (App Router) + TypeScript + Tailwind** dan **Supabase** (Auth + Postgres + RLS).
 
-Logika bisnis yang kritis (penerimaan barang, saran pembelian, pembatalan PO) berada di **database**
-(fungsi RPC dan trigger Postgres), sehingga data antar-modul selalu konsisten.
+Logika bisnis yang kritis (penerimaan barang, saran pembelian, checkout kasir dengan stok FEFO, poin dan tier pelanggan,
+agregasi dashboard) berada di **database** (fungsi RPC dan trigger Postgres), sehingga data antar-modul selalu konsisten.
+Panduan demo 10–12 menit: [`docs/DEMO.md`](docs/DEMO.md).
 
 ## Status pengerjaan
 
@@ -13,7 +14,40 @@ Logika bisnis yang kritis (penerimaan barang, saran pembelian, pembatalan PO) be
 | 1 | **SCM**: pemasok, produk, batch/kedaluwarsa, pesanan pembelian, penerimaan barang, saran pembelian, login + peran | ✅ tersedia |
 | 2 | **ERP**: kasir/POS (FEFO), riwayat + struk, penyesuaian stok, laporan keuangan | ✅ tersedia |
 | 3 | **CRM**: pelanggan, riwayat belanja, poin & tier, segmentasi, integrasi kasir | ✅ tersedia |
-| 4 | Integrasi + dashboard pemilik | ⏳ |
+| 4 | **Integrasi + dashboard**: dashboard pemilik, beranda per peran, pemeriksa integritas data, uji alur penuh, dokumentasi final | ✅ tersedia |
+
+
+## Arsitektur
+
+```mermaid
+flowchart LR
+    U[Pemilik / Kasir / Staf gudang] --> N[Next.js App Router<br/>Server Components + Server Actions]
+    N -->|login, sesi cookie| A[Supabase Auth]
+    N -->|query dan RPC| DB
+    subgraph DB[Postgres Supabase]
+        direction TB
+        R[RLS per peran pada semua tabel]
+        F[RPC: checkout, receive_goods, adjust_stock, laporan, dashboard, cek_integritas]
+        T[Trigger: saran pembelian otomatis]
+    end
+```
+
+- **Next.js** hanya antarmuka dan validasi form; angka bisnis (stok, HPP, poin, tier, dashboard) dihitung di database.
+- **RLS** membatasi data per peran; tabel penting tidak bisa ditulis langsung oleh aplikasi, hanya lewat fungsi RPC.
+- Perubahan skema selalu berupa file migration baru yang berurutan (`supabase/migrations/`).
+
+## Peran dan hak akses
+
+| Halaman / data | Pemilik | Kasir | Staf gudang |
+|---|:-:|:-:|:-:|
+| Beranda | Dashboard penuh | Penjualannya sendiri hari ini | Ringkasan stok (hitungan saja) |
+| Kasir, riwayat penjualan | ✅ semua | ✅ miliknya sendiri | ✕ |
+| Pelanggan (daftar, detail, tambah, ubah) | ✅ | ✅ (tanpa mengubah poin/tier) | ✕ |
+| Segmentasi pelanggan | ✅ | ✕ | ✕ |
+| Inventori, saran, PO, penerimaan barang | ✅ | ✕ | ✅ |
+| Produk, pemasok, lokasi simpan | ✅ | ✕ | ✅ |
+| Penyesuaian stok | ✅ | ✕ | ✅ |
+| Laporan keuangan, laba, HPP, nilai persediaan | ✅ | ✕ | ✕ |
 
 ## Menjalankan aplikasi
 
@@ -35,7 +69,7 @@ Pilih salah satu cara.
 **Cara A: SQL Editor (paling mudah)**
 
 1. Di dashboard buka **SQL Editor → New query**.
-2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (`20261119000100_scm_schema.sql`, `20261120000100_saran_diabaikan.sql`, `20261120000200_erp_schema.sql`, `20261120000300_erp_checkout.sql`, `20261120000400_erp_adjust_report.sql`, `20261120000500_erp_hardening.sql`, `20261120000600_crm_schema.sql`, `20261120000700_crm_checkout.sql`, `20261120000800_crm_riwayat.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan sebagian, cukup jalankan file yang belum dijalankan, dari yang paling awal.
+2. Jalankan **setiap file** di `supabase/migrations/` **berurutan menurut nama** (`20261119000100_scm_schema.sql`, `20261120000100_saran_diabaikan.sql`, `20261120000200_erp_schema.sql`, `20261120000300_erp_checkout.sql`, `20261120000400_erp_adjust_report.sql`, `20261120000500_erp_hardening.sql`, `20261120000600_crm_schema.sql`, `20261120000700_crm_checkout.sql`, `20261120000800_crm_riwayat.sql`, `20261120000900_dashboard.sql`, `20261120001000_integritas.sql`, `20261120001100_integritas_minor.sql`): salin isinya, tempel, **Run**. Harus berhasil tanpa galat. Jika proyek Anda sudah menjalankan sebagian, cukup jalankan file yang belum dijalankan, dari yang paling awal.
 3. Buka query baru, salin isi `supabase/seed.sql`, **Run**. Ini mengisi 3 pemasok, 4 lokasi simpan, 17 produk, 20 batch (ada yang hampir/sudah kedaluwarsa), 3 saran pembelian, 2 PO contoh, **85 transaksi penjualan** (70 dalam 30 hari terakhir + 15 yang lebih lama untuk contoh pelanggan yang menjauh), 5 riwayat penyesuaian stok, dan **25 pelanggan fiktif** (2 Gold, 8 Silver, sisanya Reguler; sebagian aktif, berisiko, atau tidak aktif).
 
 **Cara B: Supabase CLI**
@@ -194,20 +228,169 @@ flowchart TD
     K -- tidak --> M[Pantau]
 ```
 
-Tahap berikutnya (Tahap 4) menambahkan dashboard ringkasan untuk pemilik yang menyatukan SCM, ERP, dan CRM.
+## Fitur Tahap 4: integrasi dan dashboard
+
+- **Dashboard pemilik (Beranda)**: periode hari ini / 7 hari / 30 hari / bulan ini. Daftar **Perlu tindakan** (saran pembelian, batch kedaluwarsa dan hampir kedaluwarsa, PO menunggu, produk habis, pelanggan yang perlu dihubungi, masalah integritas), kartu penjualan, laba kotor, transaksi, rata-rata, dan porsi transaksi berpelanggan (masing-masing dibandingkan dengan periode sebelumnya yang sama panjang), grafik harian, panel stok dan rantai pasok (nilai persediaan, stok kedaluwarsa, PO menunggu), panel pelanggan (tier, aktivitas, pelanggan teratas), produk terlaba, dan **aktivitas terbaru lintas modul**.
+- **Beranda kasir**: transaksi dan penjualan miliknya hari ini, pintasan mulai transaksi. **Beranda staf gudang**: ringkasan stok dan tindakan gudang. Keduanya tidak menerima angka laba, HPP, biaya, atau data agregat pelanggan.
+- **Pemeriksa integritas data**: tujuh pemeriksaan lintas modul (poin dan total belanja pelanggan sama dengan penjualannya, tier sesuai total belanja, total penjualan sama dengan jumlah itemnya, stok tidak negatif, penerimaan PO konsisten, tidak ada saran ganda). Diuji dengan data yang sengaja dirusak.
+- **Angka dashboard dari database**, diuji sama persis dengan laporan keuangan, laporan produk, dan stok layak jual; batas hari memakai tanggal WIB.
+- **Uji alur penuh** (`supabase/tests/integrasi_test.sql`): terima barang → jual ke pelanggan → stok menyentuh minimum → saran → PO → terima → tier naik → laporan dan dashboard konsisten.
+
+## ERD
+
+```mermaid
+erDiagram
+    profiles ||--o{ sales : "kasir"
+    suppliers ||--o{ products : "memasok"
+    suppliers ||--o{ purchase_orders : "dipesan dari"
+    purchase_orders ||--|{ purchase_order_items : "berisi"
+    products ||--o{ purchase_order_items : "dipesan"
+    products ||--o{ batches : "stok"
+    storage_locations ||--o{ batches : "disimpan di"
+    products ||--o{ purchase_suggestions : "disarankan"
+    purchase_orders ||--o{ purchase_suggestions : "menindaklanjuti"
+    customers ||--o{ sales : "berbelanja"
+    sales ||--|{ sale_items : "berisi"
+    products ||--o{ sale_items : "dijual"
+    batches ||--o{ sale_items : "diambil dari (FEFO)"
+    batches ||--o{ stock_adjustments : "disesuaikan"
+    products ||--o{ stock_adjustments : "produk"
+    profiles {
+        uuid id PK
+        text nama
+        text peran "pemilik, kasir, staf_gudang"
+    }
+    suppliers {
+        uuid id PK
+        text nama
+        boolean aktif
+    }
+    products {
+        uuid id PK
+        text sku
+        uuid supplier_id FK
+        numeric harga_beli
+        numeric harga_jual
+        int min_stock
+        int reorder_qty
+    }
+    storage_locations {
+        uuid id PK
+        text nama
+        text tipe "freezer, chiller, kering"
+    }
+    batches {
+        uuid id PK
+        uuid product_id FK
+        uuid location_id FK
+        text kode_batch
+        int qty
+        date tgl_kedaluwarsa
+        numeric harga_beli "biaya per unit batch"
+    }
+    purchase_orders {
+        uuid id PK
+        uuid supplier_id FK
+        text status "draft, dipesan, diterima, dibatalkan"
+    }
+    purchase_order_items {
+        uuid id PK
+        uuid po_id FK
+        uuid product_id FK
+        int qty_pesan
+        int qty_diterima
+    }
+    purchase_suggestions {
+        uuid id PK
+        uuid product_id FK
+        uuid po_id FK
+        int qty_disarankan
+        text status "terbuka, dipesan, diabaikan, selesai"
+    }
+    customers {
+        uuid id PK
+        text nama
+        text telepon "unik, ternormalisasi 62..."
+        int poin
+        numeric total_belanja
+        text tier "reguler, silver, gold"
+        timestamptz terakhir_belanja
+    }
+    sales {
+        uuid id PK
+        uuid customer_id FK
+        uuid kasir_id FK
+        text metode "tunai, qris, transfer"
+        numeric total
+        int poin
+        uuid idempotency_key "anti transaksi ganda"
+    }
+    sale_items {
+        uuid id PK
+        uuid sale_id FK
+        uuid product_id FK
+        uuid batch_id FK
+        int qty
+        numeric harga_jual "snapshot"
+        numeric hpp_satuan "snapshot"
+    }
+    stock_adjustments {
+        uuid id PK
+        uuid batch_id FK
+        uuid product_id FK
+        int qty_sebelum
+        int qty_sesudah
+        text alasan "rusak, kedaluwarsa, hilang, koreksi"
+        numeric nilai
+    }
+```
+
+## Alur terintegrasi ujung ke ujung
+
+```mermaid
+flowchart TD
+    subgraph SCM[SCM: rantai pasok]
+        S1[Saran pembelian otomatis] --> S2[PO ke pemasok]
+        S2 --> S3[Terima barang: batch, kedaluwarsa, biaya]
+    end
+    subgraph ERP[ERP: penjualan dan stok]
+        E1[Kasir: checkout] --> E2[Stok per batch berkurang, FEFO]
+        E1 --> E3[Penjualan, HPP, laba kotor]
+        E4[Penyesuaian stok: rusak, kedaluwarsa, hilang]
+    end
+    subgraph CRM[CRM: pelanggan]
+        C1[Poin, total belanja, tier]
+        C2[Segmentasi dan Perlu dihubungi]
+    end
+    D[Dashboard pemilik + pemeriksa integritas]
+    S3 -- stok bertambah --> E2
+    E2 -- stok mencapai minimum --> S1
+    E4 -- stok turun --> S1
+    E4 --> E3
+    E1 -- pelanggan dipilih, satu transaksi database --> C1
+    C1 --> C2
+    E3 --> D
+    E2 --> D
+    C2 --> D
+    S2 --> D
+```
+
+Tiga titik integrasi utama (semuanya atomik di database): **penjualan mengurangi stok per batch**, **stok menipis memunculkan saran pembelian ke pemasok**, dan **transaksi memperbarui data pelanggan** (poin, total belanja, tier).
+
 
 ## Pengujian
 
 ```bash
-npm test          # uji unit (peran, format, kedaluwarsa, keranjang, periode, item PO, loyalitas, pelanggan, segmentasi)
+npm test          # uji unit (peran, format, kedaluwarsa, keranjang, periode, item PO, loyalitas, pelanggan, segmentasi, dashboard, penjaga POS)
 npm run build     # build produksi + type check
+npm run lint
 ```
 
 Uji skema database (butuh Postgres lokal, **bukan** Supabase Anda):
 
 ```bash
 createdb asri_test
-PGDATABASE=asri_test supabase/tests/run.sh   # stub auth + migration + uji + seed dua kali
+PGDATABASE=asri_test supabase/tests/run.sh   # stub auth + migration + uji SCM/ERP/CRM/dashboard/integrasi + seed dua kali
 PGDATABASE=asri_test supabase/tests/concurrency.sh   # uji konkurensi SCM (setelah run.sh)
 PGDATABASE=asri_test supabase/tests/erp_concurrency.sh   # uji konkurensi kasir (setelah run.sh)
 PGDATABASE=asri_test supabase/tests/crm_concurrency.sh   # uji konkurensi poin pelanggan (setelah run.sh)
@@ -219,7 +402,18 @@ PGDATABASE=asri_test supabase/tests/crm_concurrency.sh   # uji konkurensi poin p
 supabase/migrations/   skema, RLS, trigger, fungsi RPC
 supabase/seed.sql      data contoh
 supabase/tests/        uji SQL + runner
-src/lib/               peran, format, kedaluwarsa, klien Supabase
-src/app/(app)/gudang/  halaman SCM
-docs/superpowers/      dokumen desain dan rencana
+src/lib/               peran, format, kedaluwarsa, keranjang, loyalitas, dashboard, klien Supabase
+src/app/(app)/         beranda per peran, kasir, pelanggan, gudang (SCM), laporan
+docs/DEMO.md           skrip demo terpandu
+docs/superpowers/      dokumen desain dan rencana tiap tahap
 ```
+
+## Keterbatasan dan pengembangan lanjut
+
+- Satu toko (bukan multi-tenant sungguhan); tanpa penagihan SaaS.
+- Pembayaran QRIS/transfer hanya dicatat sebagai label, tanpa integrasi pembayaran nyata.
+- Poin hanya terkumpul dan menentukan tier; **penukaran poin menjadi diskon belum ada**.
+- Tidak ada integrasi sensor suhu; suhu lokasi hanya data referensi.
+- Migration dijalankan manual oleh pemilik proyek (SQL Editor atau Supabase CLI).
+- Halaman diuji lewat build, tipe, dan lint serta uji SQL di Postgres lokal; belum ada uji end-to-end di browser.
+- Data contoh bersifat fiktif dan tanggalnya relatif terhadap saat seed dijalankan.
