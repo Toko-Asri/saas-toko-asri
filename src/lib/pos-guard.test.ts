@@ -70,3 +70,40 @@ describe('buatPenjaga', () => {
     expect(jumlah).toBe(2)
   })
 })
+
+describe('buatPenjaga: kunci setelah sukses (cegah transaksi kedua saat struk dimuat)', () => {
+  test('setelah sukses yang menuntut kunci, panggilan berikutnya diabaikan sampai dilepas', async () => {
+    let jumlah = 0
+    const penjaga = buatPenjaga()
+    const bayar = async () => { jumlah++; return true }
+    const ok = (hasil: boolean) => hasil === true
+    expect(await penjaga.jalankan(bayar, { kunciSetelahSukses: ok })).toBe(true)
+    expect(await penjaga.jalankan(bayar, { kunciSetelahSukses: ok })).toBeUndefined() // klik lagi saat struk dimuat
+    expect(jumlah).toBe(1)
+    penjaga.lepas()
+    expect(await penjaga.jalankan(bayar, { kunciSetelahSukses: ok })).toBe(true)
+    expect(jumlah).toBe(2)
+  })
+  test('hasil gagal tidak mengunci: kasir boleh mencoba lagi', async () => {
+    let jumlah = 0
+    const penjaga = buatPenjaga()
+    const gagal = async () => { jumlah++; return false }
+    await penjaga.jalankan(gagal, { kunciSetelahSukses: (h) => h === true })
+    await penjaga.jalankan(gagal, { kunciSetelahSukses: (h) => h === true })
+    expect(jumlah).toBe(2)
+  })
+  test('galat (exception) tidak mengunci', async () => {
+    const penjaga = buatPenjaga()
+    await expect(penjaga.jalankan(async () => { throw new Error('x') }, { kunciSetelahSukses: () => true })).rejects.toThrow('x')
+    let jumlah = 0
+    await penjaga.jalankan(async () => { jumlah++; return false }, { kunciSetelahSukses: () => true })
+    expect(jumlah).toBe(1)
+  })
+  test('tanpa opsi perilakunya sama seperti sebelumnya (lepas setelah selesai)', async () => {
+    const penjaga = buatPenjaga()
+    let jumlah = 0
+    await penjaga.jalankan(async () => { jumlah++ })
+    await penjaga.jalankan(async () => { jumlah++ })
+    expect(jumlah).toBe(2)
+  })
+})

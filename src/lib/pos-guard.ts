@@ -7,17 +7,26 @@ export function bisaBayar(s: { jumlahItem: number; memproses: boolean; kembalian
 // Penjaga klik ganda: menjalankan fungsi async hanya satu kali pada satu waktu. Panggilan saat masih
 // berjalan diabaikan (mengembalikan undefined); kunci dilepas setelah selesai atau gagal. Tidak bergantung
 // pada render ulang, sehingga klik ganda dalam satu tick pun hanya menjalankan fungsi sekali.
+//
+// Opsi `kunciSetelahSukses`: bila fungsi selesai dan predikat ini bernilai true, penjaga TETAP terkunci sampai
+// `lepas()` dipanggil. Dipakai pada Bayar agar kasir tidak dapat membuat transaksi kedua selagi halaman struk dimuat.
 export function buatPenjaga() {
   let berjalan = false
   return {
-    async jalankan<T>(fn: () => Promise<T>): Promise<T | undefined> {
+    async jalankan<T>(fn: () => Promise<T>, opsi?: { kunciSetelahSukses?: (hasil: T) => boolean }): Promise<T | undefined> {
       if (berjalan) return undefined
       berjalan = true
+      let tetapTerkunci = false
       try {
-        return await fn()
+        const hasil = await fn()
+        tetapTerkunci = opsi?.kunciSetelahSukses?.(hasil) === true
+        return hasil
       } finally {
-        berjalan = false
+        if (!tetapTerkunci) berjalan = false
       }
+    },
+    lepas() {
+      berjalan = false
     },
   }
 }

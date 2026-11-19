@@ -33,7 +33,7 @@ export function tindakanPerluDiambil(i: MasukanTindakan): Tindakan[] {
     { n: i.integritasMasalah, kode: 'integritas', tingkat: 'mendesak', tautan: '/#integritas', teks: `${i.integritasMasalah} pemeriksaan integritas data gagal, periksa segera` },
     { n: i.batchKedaluwarsa, kode: 'kedaluwarsa', tingkat: 'mendesak', tautan: '/gudang/penyesuaian', teks: `${i.batchKedaluwarsa} batch sudah kedaluwarsa, buang dari stok` },
     { n: i.produkHabis, kode: 'habis', tingkat: 'mendesak', tautan: '/gudang/inventori', teks: `${i.produkHabis} produk stok layak jualnya habis` },
-    { n: i.saranTerbuka, kode: 'saran', tingkat: 'perlu', tautan: '/gudang/saran', teks: `${i.saranTerbuka} produk di bawah stok minimum, siapkan pesanan` },
+    { n: i.saranTerbuka, kode: 'saran', tingkat: 'perlu', tautan: '/gudang/saran', teks: `${i.saranTerbuka} saran pembelian menunggu keputusan (stok mencapai minimum), siapkan pesanan` },
     { n: i.poMenunggu, kode: 'po', tingkat: 'perlu', tautan: '/gudang/pembelian', teks: `${i.poMenunggu} pesanan pembelian menunggu barang datang` },
     { n: i.batchHampir, kode: 'hampir', tingkat: 'perlu', tautan: '/gudang/inventori?f=hampir', teks: `${i.batchHampir} batch hampir kedaluwarsa (14 hari atau kurang)` },
     { n: i.pelangganPerluDihubungi, kode: 'pelanggan', tingkat: 'info', tautan: '/pelanggan/segmen', teks: `${i.pelangganPerluDihubungi} pelanggan Silver/Gold mulai menjauh, hubungi mereka` },

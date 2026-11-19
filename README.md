@@ -105,7 +105,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon public key>
 
 ### 4. Membuat akun untuk tiap peran
 
-Peran: **pemilik** (akses penuh), **staf_gudang** (inventori, pembelian, master SCM), **kasir** (hanya beranda pada tahap ini; modul kasir ada di Tahap 2).
+Peran: **pemilik** (akses penuh), **staf_gudang** (inventori, pembelian, master SCM), **kasir** (kasir/POS, riwayat penjualannya sendiri, dan pelanggan; lihat matriks peran di atas).
 
 1. Buka **Authentication → Users → Add user → Create new user**. Isi email dan kata sandi, centang **Auto Confirm User**. Buat tiga akun, mis.:
    `pemilik@tokoasri.test`, `gudang@tokoasri.test`, `kasir@tokoasri.test`.
@@ -191,6 +191,7 @@ flowchart TD
 ## Fitur Tahap 3: modul CRM
 
 - **Data pelanggan**: nama, telepon/WhatsApp, email, alamat, catatan. Nomor telepon disimpan ternormalisasi (`0812-3456-7890`, `+62 812 3456 7890` dianggap nomor yang sama) dan unik. Pelanggan dinonaktifkan, tidak dihapus.
+- **Aturan nomor telepon**: hanya nomor Indonesia yang diterima (`0812…`, `+62 812…`, `0062 812…`, atau `812…`), semuanya disimpan sebagai `62812…`; aturan ini dijaga di aplikasi dan oleh *check constraint* database. Pada migrasi Tahap 4, nomor lama yang tidak valid atau bentrok dikosongkan dan nilai lamanya disimpan di kolom catatan pelanggan.
 - **Poin dan tier**: transaksi yang memilih pelanggan otomatis menambah poin, total belanja, jumlah transaksi, dan memperbarui tier **dalam transaksi database yang sama** dengan penjualan (kirim ulang tidak memberi poin dua kali; transaksi gagal tidak mengubah pelanggan).
 - **Kasir**: cari pelanggan (nama atau telepon), tambah pelanggan baru di tempat, perkiraan poin yang didapat, dan struk memuat pelanggan serta poin. Tanpa memilih pelanggan, transaksi dicatat sebagai tamu (tanpa poin).
 - **Detail pelanggan**: poin, bilah kemajuan ke tier berikutnya, riwayat belanja (semua kasir), produk favorit, tombol WhatsApp.
@@ -240,7 +241,6 @@ flowchart TD
 
 ```mermaid
 erDiagram
-    profiles ||--o{ sales : "kasir"
     suppliers ||--o{ products : "memasok"
     suppliers ||--o{ purchase_orders : "dipesan dari"
     purchase_orders ||--|{ purchase_order_items : "berisi"
@@ -248,8 +248,8 @@ erDiagram
     products ||--o{ batches : "stok"
     storage_locations ||--o{ batches : "disimpan di"
     products ||--o{ purchase_suggestions : "disarankan"
-    purchase_orders ||--o{ purchase_suggestions : "menindaklanjuti"
-    customers ||--o{ sales : "berbelanja"
+    purchase_orders |o--o{ purchase_suggestions : "menindaklanjuti (opsional)"
+    customers |o--o{ sales : "berbelanja (opsional: tamu tanpa pelanggan)"
     sales ||--|{ sale_items : "berisi"
     products ||--o{ sale_items : "dijual"
     batches ||--o{ sale_items : "diambil dari (FEFO)"
@@ -319,7 +319,7 @@ erDiagram
     sales {
         uuid id PK
         uuid customer_id FK
-        uuid kasir_id FK
+        uuid kasir_id "id pengguna Supabase Auth, tanpa FK"
         text metode "tunai, qris, transfer"
         numeric total
         int poin

@@ -62,12 +62,18 @@ export function Pos({ produk, pelanggan }: { produk: ProdukPos[]; pelanggan: Pel
     return kunci.current
   }
 
+  // Penjaga klik ganda (tidak bergantung pada render ulang); hanya dipanggil dari event handler.
+  const [penjagaBayar] = useState(buatPenjaga)
+  const [penjagaSimpanBaru] = useState(buatPenjaga)
+
   function kosongkan() {
     setKeranjang([])
     setBayarStr('')
     setGalat(null)
     setPelangganId(null)
     kunci.current = null
+    setMemproses(false)
+    penjagaBayar.lepas()   // buka kunci setelah sukses bila kasir memilih tetap di halaman ini
   }
 
   async function simpanPelangganBaru() {
@@ -86,14 +92,13 @@ export function Pos({ produk, pelanggan }: { produk: ProdukPos[]; pelanggan: Pel
     }
   }
 
-  // Penjaga klik ganda (tidak bergantung pada render ulang); hanya dipanggil dari event handler.
-  const [penjagaBayar] = useState(buatPenjaga)
-  const [penjagaSimpanBaru] = useState(buatPenjaga)
-  const jalankanBayar = () => penjagaBayar.jalankan(prosesBayar)
+  const jalankanBayar = () => penjagaBayar.jalankan(prosesBayar, { kunciSetelahSukses: (ok) => ok === true })
   const jalankanSimpanBaru = () => penjagaSimpanBaru.jalankan(simpanPelangganBaru)
 
-  async function prosesBayar() {
-    if (!bisaBayar) return
+  // Mengembalikan true bila transaksi berhasil. Pada sukses, tombol TETAP terkunci (memproses tetap true dan penjaga
+  // tidak dilepas) sampai halaman struk menggantikan POS, agar klik berikutnya tidak membuat transaksi kedua.
+  async function prosesBayar(): Promise<boolean> {
+    if (!bisaBayar) return false
     setMemproses(true)
     setGalat(null)
     try {
@@ -103,14 +108,16 @@ export function Pos({ produk, pelanggan }: { produk: ProdukPos[]; pelanggan: Pel
           ? 'Transaksi dengan keranjang ini mungkin sudah tercatat. Periksa Riwayat Penjualan; jika belum ada, tekan "Kosongkan keranjang" lalu input ulang.'
           : hasil.error)
         router.refresh() // harga/stok mungkin berubah: muat ulang data produk, keranjang diselaraskan otomatis
-        return
+        setMemproses(false)
+        return false
       }
       kunci.current = null
       router.push(`/kasir/riwayat/${hasil.saleId}`)
+      return true
     } catch {
       setGalat('Koneksi bermasalah. Mencoba lagi dengan isi yang sama aman dari transaksi ganda; jika ragu, periksa Riwayat Penjualan dulu.')
-    } finally {
       setMemproses(false)
+      return false
     }
   }
 

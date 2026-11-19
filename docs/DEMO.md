@@ -18,7 +18,7 @@ Nama produk, pelanggan, dan angka di bawah ini berasal dari `supabase/seed.sql` 
 
 Buka **Beranda**.
 
-- **Perlu tindakan** menampilkan: 3 produk di bawah stok minimum (*Nugget Ayam 500 g*, *Es Krim Vanilla 1 L*, *Salmon Fillet 300 g*), 2 batch sudah kedaluwarsa (*Sosis Sapi 500 g*, *Bakso Sapi 500 g*), 3 batch hampir kedaluwarsa (*Dumpling Ayam 250 g*, *Bakso Ikan 500 g*, *Ikan Dori Fillet 500 g*), 1 pesanan pembelian menunggu barang (CV Laut Segar Abadi), dan 3 pelanggan Silver yang perlu dihubungi.
+- **Perlu tindakan** menampilkan: 3 saran pembelian menunggu keputusan karena stok mencapai minimum (*Nugget Ayam 500 g*, *Es Krim Vanilla 1 L*, *Salmon Fillet 300 g*), 2 batch sudah kedaluwarsa (*Sosis Sapi 500 g*, *Bakso Sapi 500 g*), 3 batch hampir kedaluwarsa (*Dumpling Ayam 250 g*, *Bakso Ikan 500 g*, *Ikan Dori Fillet 500 g*), 1 pesanan pembelian menunggu barang (CV Laut Segar Abadi), dan 3 pelanggan Silver yang perlu dihubungi.
 - Kartu **penjualan, laba kotor, transaksi**, serta perbandingan dengan periode sebelumnya; grafik harian; panel stok, pelanggan, produk terlaba.
 - Gulir ke bawah: **Aktivitas terbaru lintas modul** dan **Integritas data** (ketujuh pemeriksaan bertanda ✓).
 
