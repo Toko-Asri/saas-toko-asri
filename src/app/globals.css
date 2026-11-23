@@ -25,6 +25,10 @@
   --color-ink-950: #051f31;
 
   --color-ice: #f4f9fc;
+
+  /* Teks redup: nilai default Tailwind slate-500/400 sedikit di bawah kontras WCAG AA (4,5:1) pada latar es. */
+  --color-slate-500: #4f6076;
+  --color-slate-400: #5e6e84;
   --color-mint-50: #ecfdf5;
   --color-mint-100: #d1fae5;
   --color-mint-600: #059669;
@@ -106,10 +110,9 @@ h1, h2, h3 { letter-spacing: -0.015em; }
 /* Opening animation login: disembunyikan lebih awal oleh skrip kecil (data-intro="skip") agar tidak berkedip. */
 [data-intro="skip"] .intro-overlay { display: none; }
 
-/* Cetak: struk 80 mm tanpa sidebar/header; halaman lain tetap A4 bawaan. */
-@page struk { size: 80mm auto; margin: 4mm; }
+/* Cetak: sembunyikan sidebar/header (.no-print); struk dibatasi selebar 80 mm (pilih kertas 80 mm di dialog cetak printer termal). */
 @media print {
   body { background: #fff !important; }
   .no-print { display: none !important; }
-  .struk { page: struk; box-shadow: none !important; border: 0 !important; }
+  .struk { width: min(80mm, 100%); margin-inline: auto; box-shadow: none !important; border: 0 !important; border-radius: 0 !important; }
 }

@@ -53,7 +53,7 @@ export default async function LaporanPage({ searchParams }: { searchParams: Prom
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Stat judul={<>Penjualan ({transaksi} transaksi)</>}>{formatRupiah(penjualan)}</Stat>
         <Stat judul={<>HPP (harga pokok penjualan)</>}>{formatRupiah(hpp)}</Stat>
-        <Stat judul={<>Laba kotor · margin {margin.toFixed(1)}%</>} nada="sukses">{formatRupiah(laba)}</Stat>
+        <Stat judul={<>Laba kotor · margin {margin.toFixed(1).replace(".", ",")}%</>} nada="sukses">{formatRupiah(laba)}</Stat>
         <Stat judul={<>Kerugian stok (rusak, kedaluwarsa, hilang)</>} nada="bahaya">{formatRupiah(rugi)}</Stat>
         <Card><div className="text-sm text-slate-500">Laba setelah kerugian stok</div><div className={`text-2xl font-bold ${laba - rugi < 0 ? 'text-red-700' : ''}`}>{formatRupiah(laba - rugi)}</div></Card>
       </div>

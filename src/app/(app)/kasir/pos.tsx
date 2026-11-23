@@ -279,7 +279,7 @@ export function Pos({ produk, pelanggan }: { produk: ProdukPos[]; pelanggan: Pel
         ) : <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Pembayaran {metode} dicatat sebesar total belanja.</p>}
 
         {galat && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{galat}</p>}
-        <button type="button" onClick={jalankanBayar} disabled={!bisaBayar} className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-brand-500 to-brand-700 text-base font-bold text-white shadow-lg shadow-brand-700/25 transition hover:from-brand-600 hover:to-brand-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none">
+        <button type="button" onClick={jalankanBayar} disabled={!bisaBayar} className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-brand-700 to-brand-800 text-base font-bold text-white shadow-lg shadow-brand-700/25 transition hover:from-brand-800 hover:to-brand-900 active:scale-[0.99] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none">
           {memproses ? <><LoaderCircle aria-hidden className="size-5 animate-spin" />Memproses…</> : `Bayar ${formatRupiah(totalBayar)}`}
         </button>
       </aside>
@@ -287,7 +287,7 @@ export function Pos({ produk, pelanggan }: { produk: ProdukPos[]; pelanggan: Pel
       {/* Bar ringkas mobile: total dan pintasan ke keranjang */}
       {keranjang.length > 0 && (
         <div className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-pop backdrop-blur lg:hidden">
-          <a href="#keranjang" className="flex h-12 items-center justify-between rounded-xl bg-brand-600 px-4 text-white shadow-md active:scale-[0.99]">
+          <a href="#keranjang" className="flex h-12 items-center justify-between rounded-xl bg-brand-700 px-4 text-white shadow-md active:scale-[0.99]">
             <span className="text-sm font-semibold">{jumlahItem} item</span>
             <span className="tabular text-base font-bold">{formatRupiah(totalBayar)} · Lihat keranjang</span>
           </a>

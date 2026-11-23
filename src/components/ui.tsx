@@ -14,11 +14,13 @@ const tombolDasar =
   'disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100'
 
 export const btnCls =
-  tombolDasar + ' rounded-xl bg-brand-600 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-brand-700 hover:shadow-md'
+  tombolDasar + ' rounded-xl bg-brand-700 px-4 py-2.5 text-sm text-white shadow-sm hover:bg-brand-800 hover:shadow-md'
 export const btnGhostCls =
   tombolDasar + ' rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800'
 export const btnSoftCls =
   tombolDasar + ' rounded-xl bg-brand-50 px-4 py-2.5 text-sm text-brand-800 hover:bg-brand-100'
+export const btnWaCls =
+  tombolDasar + ' rounded-lg border border-mint-100 bg-mint-50 px-3 py-1.5 text-xs text-mint-700 hover:bg-mint-100'
 export const btnDangerCls =
   tombolDasar + ' rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50'
 
@@ -157,7 +159,7 @@ export function KpiCard({
 export const pilCls = (aktif: boolean) =>
   'inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ' +
   (aktif
-    ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+    ? 'border-brand-700 bg-brand-700 text-white shadow-sm'
     : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800')
 
 /* ----- Statistik ringkas (tanpa ikon) ----- */

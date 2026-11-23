@@ -13,7 +13,7 @@ function TombolMasuk() {
   return (
     <button
       disabled={pending}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-brand-500 to-brand-700 py-3 text-sm font-semibold text-white shadow-md shadow-brand-700/25 transition hover:from-brand-600 hover:to-brand-800 active:scale-[0.99] disabled:cursor-wait disabled:opacity-80"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-brand-700 to-brand-800 py-3 text-sm font-semibold text-white shadow-md shadow-brand-700/25 transition hover:from-brand-800 hover:to-brand-900 active:scale-[0.99] disabled:cursor-wait disabled:opacity-80"
     >
       {pending ? <><LoaderCircle aria-hidden className="size-4 animate-spin" /> Memproses…</> : 'Masuk'}
     </button>

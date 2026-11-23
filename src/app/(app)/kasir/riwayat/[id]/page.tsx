@@ -44,7 +44,9 @@ export default async function StrukPage({ params, searchParams }: { params: Prom
       )}
 
       <article className="struk relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 text-sm shadow-pop print:p-0">
-        <div className="mb-4 flex justify-center print:mb-2"><Logo ukuran={36} /></div>
+        <div className="mb-4 flex justify-center print:hidden"><Logo ukuran={36} /></div>
+        {/* Saat dicetak, latar gradien logo tidak ikut tercetak: pakai nama toko berupa teks */}
+        <div className="mb-2 hidden text-center print:block"><div className="text-lg font-extrabold">Toko Asri</div><div className="text-[10px] uppercase tracking-[0.2em]">Frozen food</div></div>
         <div className="space-y-0.5 border-y border-dashed border-slate-300 py-3 text-slate-600">
           <div className="flex justify-between"><span>No.</span><span className="tabular font-semibold text-slate-900">#{sale.nomor}</span></div>
           <div className="flex justify-between"><span>Waktu</span><span>{waktu.format(new Date(sale.created_at))} WIB</span></div>

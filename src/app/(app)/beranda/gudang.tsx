@@ -1,10 +1,13 @@
 import Link from 'next/link'
+import { CalendarX2, Hourglass, PackageMinus, Boxes } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { tindakanPerluDiambil } from '@/lib/dashboard'
+import { kelompokMenu } from '@/lib/nav'
 import { menuFor } from '@/lib/roles'
-import { Banner, Stat } from '@/components/ui'
+import { Banner, KpiCard } from '@/components/ui'
+import { PerluTindakan } from '@/components/perlu-tindakan'
+import { IkonMenu } from '@/components/shell/ikon'
 
-const WARNA = { mendesak: 'border-red-300 bg-red-50 text-red-900', perlu: 'border-amber-300 bg-amber-50 text-amber-900', info: 'border-brand-200 bg-brand-50 text-brand-900' } as const
 type Stok = {
   produk_aktif: number; produk_di_bawah_minimum: number; produk_habis: number; saran_terbuka: number
   batch_hampir_kedaluwarsa: number; batch_kedaluwarsa: number; po_menunggu: number
@@ -20,35 +23,33 @@ export async function BerandaGudang({ nama }: { nama: string }) {
     saranTerbuka: s?.saran_terbuka ?? 0, batchKedaluwarsa: s?.batch_kedaluwarsa ?? 0, batchHampir: s?.batch_hampir_kedaluwarsa ?? 0,
     poMenunggu: s?.po_menunggu ?? 0, produkHabis: s?.produk_habis ?? 0, pelangganPerluDihubungi: 0, integritasMasalah: 0,
   })
-  const menu = menuFor('staf_gudang').filter((m) => m.href !== '/')
+  const pintasan = kelompokMenu(menuFor('staf_gudang')).filter((g) => g.judul === 'Gudang & Pasokan').flatMap((g) => g.item)
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Halo, {nama}</h1>
-        <p className="text-sm text-slate-500">Ringkasan gudang dan rantai pasok</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-[1.7rem]">Halo, {nama}</h1>
+        <p className="mt-1 text-sm text-slate-500">Ringkasan gudang dan rantai pasok</p>
       </div>
       <Banner error={error?.message} />
-      <section aria-label="Perlu tindakan" className="space-y-2">
-        <h2 className="text-lg font-semibold">Perlu tindakan</h2>
-        {tindakan.length === 0 ? (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">Semua beres: tidak ada yang perlu ditindaklanjuti saat ini.</p>
-        ) : (
-          <div className="grid gap-2 md:grid-cols-2">
-            {tindakan.map((t) => <Link key={t.kode} href={t.tautan} className={`rounded-lg border p-3 text-sm hover:shadow-sm ${WARNA[t.tingkat]}`}>{t.teks} →</Link>)}
-          </div>
-        )}
-      </section>
+      <PerluTindakan tindakan={tindakan} />
       {s && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat judul={<>Produk aktif</>}>{s.produk_aktif}</Stat>
-          <Stat judul={<>Di bawah stok minimum</>} nada="peringatan">{s.produk_di_bawah_minimum}</Stat>
-          <Stat judul={<>Batch kedaluwarsa</>} nada="bahaya">{s.batch_kedaluwarsa}</Stat>
-          <Stat judul={<>PO menunggu barang</>}>{s.po_menunggu}</Stat>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <KpiCard indeks={1} judul="Produk aktif" nilai={String(s.produk_aktif)} ikon={<Boxes className="size-5" />} />
+          <KpiCard indeks={2} judul="Di bawah stok minimum" nilai={String(s.produk_di_bawah_minimum)} ikon={<PackageMinus className="size-5" />} nada="peringatan" />
+          <KpiCard indeks={3} judul="Batch kedaluwarsa" nilai={String(s.batch_kedaluwarsa)} ikon={<CalendarX2 className="size-5" />} nada="bahaya" />
+          <KpiCard indeks={4} judul="PO menunggu barang" nilai={String(s.po_menunggu)} ikon={<Hourglass className="size-5" />} />
         </div>
       )}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {menu.map((m) => <Link key={m.href} href={m.href} className="rounded-lg border bg-white p-4 font-medium hover:border-brand-500">{m.label}</Link>)}
+      <h2 className="text-lg font-bold text-slate-900">Pintasan</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {pintasan.map((m, i) => (
+          <Link key={m.href} href={m.href} style={{ '--i': i } as React.CSSProperties}
+            className="reveal group flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 font-semibold text-slate-800 shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-pop">
+            <span aria-hidden className="grid size-10 place-items-center rounded-xl bg-brand-50 text-brand-600 transition group-hover:bg-brand-100"><IkonMenu nama={m.ikon} /></span>
+            {m.label}
+          </Link>
+        ))}
       </div>
     </div>
   )

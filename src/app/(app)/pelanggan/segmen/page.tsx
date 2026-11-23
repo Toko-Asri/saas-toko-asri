@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatRupiah } from '@/lib/format'
 import { labelAktivitas, labelTier, linkWhatsapp } from '@/lib/loyalty'
 import { hitungSegmen, perluDihubungi, saringSegmen, SEMUA_AKTIVITAS, SEMUA_TIER, type BarisSegmen } from '@/lib/segmen'
-import { Banner, BarisKosong, Card, LencanaTier, PageHeader, Table } from '@/components/ui'
+import { Banner, BarisKosong, Card, LencanaTier, PageHeader, Table, btnGhostCls, btnWaCls } from '@/components/ui'
 
 const BATAS_DAFTAR = 200
 const WARNA_SEL = (n: number) => (n === 0 ? 'text-slate-300' : 'font-semibold text-brand-800 hover:underline')
@@ -60,7 +60,7 @@ export default async function SegmenPage({ searchParams }: { searchParams: Promi
               <td className="px-3 py-2">{formatRupiah(p.total_belanja)}</td>
               <td className="px-3 py-2">{p.hari_sejak_belanja ?? '–'}</td>
               <td className="px-3 py-2">{p.poin}</td>
-              <td className="px-3 py-2">{wa ? <a href={wa} target="_blank" rel="noreferrer" className="rounded border px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">WhatsApp</a> : <span className="text-xs text-slate-400">Tanpa telepon</span>}</td>
+              <td className="px-3 py-2">{wa ? <a href={wa} target="_blank" rel="noreferrer" className={btnWaCls}>WhatsApp</a> : <span className="text-xs text-slate-400">Tanpa telepon</span>}</td>
             </tr>
           )
         })}
@@ -68,7 +68,7 @@ export default async function SegmenPage({ searchParams }: { searchParams: Promi
 
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">Daftar pelanggan{terfilter ? ' (disaring)' : ''}</h2>
-        {terfilter && <Link href="/pelanggan/segmen" className="rounded border px-3 py-1 text-xs hover:bg-slate-50">Hapus filter</Link>}
+        {terfilter && <Link href="/pelanggan/segmen" className={btnGhostCls}>Hapus filter</Link>}
       </div>
       <Table head={['Pelanggan', 'Tier', 'Aktivitas', 'Total belanja', 'Transaksi', 'Hari sejak belanja']}>
         {tampil.length === 0 && <BarisKosong colSpan={6}>Tidak ada pelanggan pada segmen ini.</BarisKosong>}
