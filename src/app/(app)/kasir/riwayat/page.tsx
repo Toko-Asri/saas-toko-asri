@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah } from '@/lib/format'
 import { rentangPeriode, type KodePeriode } from '@/lib/periode'
-import { Card, PageHeader, Table } from '@/components/ui'
+import { BarisKosong, PageHeader, Stat, Table, pilCls } from '@/components/ui'
 
 const PILIHAN: { kode: KodePeriode; label: string }[] = [
   { kode: 'hari-ini', label: 'Hari ini' },
@@ -36,23 +36,23 @@ export default async function RiwayatPage({ searchParams }: { searchParams: Prom
       <div className="flex gap-2">
         {PILIHAN.map((x) => (
           <Link key={x.kode} href={x.kode === 'hari-ini' ? '/kasir/riwayat' : `/kasir/riwayat?p=${x.kode}`}
-            className={`rounded-full border px-3 py-1 text-xs ${kode === x.kode ? 'bg-sky-700 text-white' : 'bg-white hover:bg-slate-50'}`}>{x.label}</Link>
+            className={pilCls(kode === x.kode)}>{x.label}</Link>
         ))}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Card><div className="text-sm text-slate-500">Jumlah transaksi</div><div className="text-2xl font-bold">{jumlah}</div></Card>
-        <Card><div className="text-sm text-slate-500">Total penjualan{terpotong ? ` (${baris.length} terbaru)` : ''}</div><div className="text-2xl font-bold">{formatRupiah(jumlahRupiah)}</div></Card>
+        <Stat judul={<>Jumlah transaksi</>}>{jumlah}</Stat>
+        <Stat judul={<>Total penjualan{terpotong ? ` (${baris.length} terbaru)` : ''}</>}>{formatRupiah(jumlahRupiah)}</Stat>
       </div>
       {terpotong && <p className="text-sm text-amber-700">Menampilkan {BATAS} transaksi terbaru dari {jumlah}. Persempit periode untuk melihat sisanya.</p>}
       <Table head={['No.', 'Waktu', 'Metode', 'Total', '']}>
-        {baris.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">Belum ada transaksi pada periode ini.</td></tr>}
+        {baris.length === 0 && <BarisKosong colSpan={5}>Belum ada transaksi pada periode ini.</BarisKosong>}
         {baris.map((s) => (
           <tr key={s.id}>
             <td className="px-3 py-2 font-mono text-xs">#{s.nomor}</td>
             <td className="px-3 py-2">{waktu.format(new Date(s.created_at))}</td>
             <td className="px-3 py-2">{NAMA_METODE[s.metode]}</td>
             <td className="px-3 py-2 font-medium">{formatRupiah(Number(s.total))}</td>
-            <td className="px-3 py-2"><Link href={`/kasir/riwayat/${s.id}`} className="text-sky-700 hover:underline">Struk</Link></td>
+            <td className="px-3 py-2"><Link href={`/kasir/riwayat/${s.id}`} className="text-brand-700 hover:underline">Struk</Link></td>
           </tr>
         ))}
       </Table>

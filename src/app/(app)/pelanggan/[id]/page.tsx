@@ -4,7 +4,7 @@ import { getSessionProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah, formatTanggal } from '@/lib/format'
 import { kemajuanTier, labelTier, linkWhatsapp } from '@/lib/loyalty'
-import { Card, LencanaTier, PageHeader, Table } from '@/components/ui'
+import { BarisKosong, Card, LencanaTier, PageHeader, Table } from '@/components/ui'
 
 const NAMA_METODE: Record<string, string> = { tunai: 'Tunai', qris: 'QRIS', transfer: 'Transfer' }
 const waktu = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' })
@@ -31,13 +31,13 @@ export default async function PelangganDetailPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-4">
-      <Link href="/pelanggan" className="text-sm text-sky-700 hover:underline">← Semua pelanggan</Link>
+      <Link href="/pelanggan" className="text-sm text-brand-700 hover:underline">← Semua pelanggan</Link>
       <PageHeader title={c.nama} subtitle={`Terdaftar ${formatTanggal(c.tgl_daftar)}${c.aktif ? '' : ' · nonaktif'}`} />
       <div className="grid gap-3 lg:grid-cols-3">
         <Card>
           <div className="mb-2 flex items-center gap-2"><LencanaTier tier={c.tier} /><span className="text-2xl font-bold">{c.poin} poin</span></div>
           <div className="h-2 overflow-hidden rounded bg-slate-200" role="progressbar" aria-valuenow={k.persen} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full bg-sky-600" style={{ width: `${k.persen}%` }} />
+            <div className="h-full bg-brand-600" style={{ width: `${k.persen}%` }} />
           </div>
           <p className="mt-2 text-sm text-slate-600">
             {k.berikutnya ? `${formatRupiah(k.kurang)} lagi menuju ${labelTier(k.berikutnya)}` : 'Tier tertinggi tercapai'}
@@ -66,7 +66,7 @@ export default async function PelangganDetailPage({ params }: { params: Promise<
 
       <h2 className="text-lg font-semibold">Produk favorit</h2>
       <Table head={['Produk', 'Jumlah dibeli', 'Nilai']}>
-        {favorit.length === 0 && <tr><td colSpan={3} className="px-3 py-6 text-center text-slate-500">Belum ada pembelian.</td></tr>}
+        {favorit.length === 0 && <BarisKosong colSpan={3}>Belum ada pembelian.</BarisKosong>}
         {favorit.map((p) => (
           <tr key={p.product_id}><td className="px-3 py-2 font-medium">{p.nama}</td><td className="px-3 py-2">{p.qty}</td><td className="px-3 py-2">{formatRupiah(Number(p.total))}</td></tr>
         ))}
@@ -74,7 +74,7 @@ export default async function PelangganDetailPage({ params }: { params: Promise<
 
       <h2 className="text-lg font-semibold">Riwayat belanja</h2>
       <Table head={['No.', 'Waktu', 'Metode', 'Item', 'Total', 'Poin', '']}>
-        {riwayat.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">Belum ada transaksi.</td></tr>}
+        {riwayat.length === 0 && <BarisKosong colSpan={7}>Belum ada transaksi.</BarisKosong>}
         {riwayat.map((s) => (
           <tr key={s.sale_id}>
             <td className="px-3 py-2 font-mono text-xs">#{s.nomor}</td>
@@ -83,7 +83,7 @@ export default async function PelangganDetailPage({ params }: { params: Promise<
             <td className="px-3 py-2">{s.jumlah_item}</td>
             <td className="px-3 py-2 font-medium">{formatRupiah(s.total)}</td>
             <td className="px-3 py-2">+{s.poin}</td>
-            <td className="px-3 py-2">{bisaBukaStruk && <Link href={`/kasir/riwayat/${s.sale_id}`} className="text-sky-700 hover:underline">Struk</Link>}</td>
+            <td className="px-3 py-2">{bisaBukaStruk && <Link href={`/kasir/riwayat/${s.sale_id}`} className="text-brand-700 hover:underline">Struk</Link>}</td>
           </tr>
         ))}
       </Table>

@@ -2,9 +2,9 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { tindakanPerluDiambil } from '@/lib/dashboard'
 import { menuFor } from '@/lib/roles'
-import { Banner, Card } from '@/components/ui'
+import { Banner, Stat } from '@/components/ui'
 
-const WARNA = { mendesak: 'border-red-300 bg-red-50 text-red-900', perlu: 'border-amber-300 bg-amber-50 text-amber-900', info: 'border-sky-200 bg-sky-50 text-sky-900' } as const
+const WARNA = { mendesak: 'border-red-300 bg-red-50 text-red-900', perlu: 'border-amber-300 bg-amber-50 text-amber-900', info: 'border-brand-200 bg-brand-50 text-brand-900' } as const
 type Stok = {
   produk_aktif: number; produk_di_bawah_minimum: number; produk_habis: number; saran_terbuka: number
   batch_hampir_kedaluwarsa: number; batch_kedaluwarsa: number; po_menunggu: number
@@ -41,14 +41,14 @@ export async function BerandaGudang({ nama }: { nama: string }) {
       </section>
       {s && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card><div className="text-sm text-slate-500">Produk aktif</div><div className="text-2xl font-bold">{s.produk_aktif}</div></Card>
-          <Card><div className="text-sm text-slate-500">Di bawah stok minimum</div><div className="text-2xl font-bold text-amber-700">{s.produk_di_bawah_minimum}</div></Card>
-          <Card><div className="text-sm text-slate-500">Batch kedaluwarsa</div><div className="text-2xl font-bold text-red-700">{s.batch_kedaluwarsa}</div></Card>
-          <Card><div className="text-sm text-slate-500">PO menunggu barang</div><div className="text-2xl font-bold">{s.po_menunggu}</div></Card>
+          <Stat judul={<>Produk aktif</>}>{s.produk_aktif}</Stat>
+          <Stat judul={<>Di bawah stok minimum</>} nada="peringatan">{s.produk_di_bawah_minimum}</Stat>
+          <Stat judul={<>Batch kedaluwarsa</>} nada="bahaya">{s.batch_kedaluwarsa}</Stat>
+          <Stat judul={<>PO menunggu barang</>}>{s.po_menunggu}</Stat>
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {menu.map((m) => <Link key={m.href} href={m.href} className="rounded-lg border bg-white p-4 font-medium hover:border-sky-500">{m.label}</Link>)}
+        {menu.map((m) => <Link key={m.href} href={m.href} className="rounded-lg border bg-white p-4 font-medium hover:border-brand-500">{m.label}</Link>)}
       </div>
     </div>
   )

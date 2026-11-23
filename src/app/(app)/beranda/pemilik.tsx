@@ -1,13 +1,19 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import {
+  ArrowUpRight, Calculator, ChevronRight, CircleAlert, CircleDollarSign, ClipboardCheck, Clock, Coins, Info, Lightbulb, PackageX,
+  PiggyBank, Receipt, ShieldAlert, ShieldCheck, ShoppingCart, Truck, UserPlus, Users, Wallet,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah } from '@/lib/format'
-import { labelPerubahan, perubahan, tindakanPerluDiambil, waktuRelatif, type Tindakan } from '@/lib/dashboard'
+import { perubahan, tindakanPerluDiambil, waktuRelatif, type Tindakan } from '@/lib/dashboard'
 import { labelAktivitas, labelTier } from '@/lib/loyalty'
 import { rentangPeriode, type KodePeriode } from '@/lib/periode'
 import { hitungSegmen, perluDihubungi, SEMUA_AKTIVITAS, SEMUA_TIER, type BarisSegmen } from '@/lib/segmen'
-import { Banner, Card, LencanaTier, Table } from '@/components/ui'
+import { inisial } from '@/lib/nav'
+import { Badge, Banner, EmptyState, KpiCard, LencanaTier, Table } from '@/components/ui'
 import { GrafikHarian, type TitikHarian } from '@/components/grafik'
+import { Tren } from '@/components/tren'
 
 export const PERIODE: { kode: KodePeriode; label: string }[] = [
   { kode: 'hari-ini', label: 'Hari ini' },
@@ -16,11 +22,19 @@ export const PERIODE: { kode: KodePeriode; label: string }[] = [
   { kode: 'bulan-ini', label: 'Bulan ini' },
 ]
 
-const IKON: Record<string, string> = { penjualan: '🛒', penyesuaian_stok: '📦', saran_pembelian: '💡', po_dibuat: '🚚', pelanggan_baru: '👤' }
-const WARNA_TINDAKAN: Record<Tindakan['tingkat'], string> = {
-  mendesak: 'border-red-300 bg-red-50 text-red-900',
-  perlu: 'border-amber-300 bg-amber-50 text-amber-900',
-  info: 'border-sky-200 bg-sky-50 text-sky-900',
+// Ikon dan warna aktivitas lintas modul (jenis berasal dari database; hanya tampilannya yang diatur di sini).
+const AKTIVITAS: Record<string, { ikon: ReactNode; warna: string }> = {
+  penjualan: { ikon: <ShoppingCart className="size-4" />, warna: 'bg-brand-50 text-brand-700' },
+  penyesuaian_stok: { ikon: <ClipboardCheck className="size-4" />, warna: 'bg-amber-50 text-amber-700' },
+  saran_pembelian: { ikon: <Lightbulb className="size-4" />, warna: 'bg-mint-50 text-mint-700' },
+  po_dibuat: { ikon: <Truck className="size-4" />, warna: 'bg-slate-100 text-slate-700' },
+  pelanggan_baru: { ikon: <UserPlus className="size-4" />, warna: 'bg-violet-50 text-violet-700' },
+}
+
+const TINGKAT: Record<Tindakan['tingkat'], { ikon: ReactNode; warna: string; aksen: string; label: string }> = {
+  mendesak: { ikon: <CircleAlert className="size-5" />, warna: 'bg-red-50 text-red-600', aksen: 'border-l-red-500', label: 'Mendesak' },
+  perlu: { ikon: <Clock className="size-5" />, warna: 'bg-amber-50 text-amber-600', aksen: 'border-l-amber-500', label: 'Perlu' },
+  info: { ikon: <Info className="size-5" />, warna: 'bg-brand-50 text-brand-600', aksen: 'border-l-brand-500', label: 'Info' },
 }
 
 type Ringkasan = {
@@ -37,36 +51,66 @@ type Aktivitas = { waktu: string; jenis: string; judul: string; rincian: string;
 type ProdukLaporan = { product_id: string; nama: string; qty_terjual: number; penjualan: number; laba_kotor: number }
 type Integritas = { kode: string; nama: string; ok: boolean; jumlah_masalah: number; contoh: string }
 
+
 const num = (v: unknown) => Number(v ?? 0)
 
-function Kpi({ judul, nilai, ubah }: { judul: string; nilai: string; ubah?: string }) {
+function Panel({ judul, ikon, tautan, galat, children, className = '', indeks = 0 }: {
+  judul: string; ikon?: ReactNode; tautan?: { href: string; label: string }; galat?: string; children: ReactNode; className?: string; indeks?: number
+}) {
   return (
-    <Card>
-      <div className="text-sm text-slate-500">{judul}</div>
-      <div className="text-2xl font-bold">{nilai}</div>
-      {ubah && <div className="text-xs text-slate-500">{ubah} vs periode sebelumnya</div>}
-    </Card>
-  )
-}
-
-function Panel({ judul, tautan, galat, children }: { judul: string; tautan?: { href: string; label: string }; galat?: string; children: ReactNode }) {
-  return (
-    <Card>
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 className="font-semibold">{judul}</h2>
-        {tautan && <Link href={tautan.href} className="text-xs text-sky-700 hover:underline">{tautan.label} →</Link>}
+    <section className={`reveal rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card md:p-5 ${className}`} style={{ '--i': indeks } as React.CSSProperties}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 font-semibold text-slate-900">{ikon && <span aria-hidden className="text-brand-600">{ikon}</span>}{judul}</h2>
+        {tautan && <Link href={tautan.href} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-700 hover:underline">{tautan.label}<ArrowUpRight aria-hidden className="size-3.5" /></Link>}
       </div>
       {galat ? <Banner error={galat} /> : children}
-    </Card>
+    </section>
   )
 }
 
-const Baris = ({ label, nilai, href }: { label: string; nilai: ReactNode; href?: string }) => (
-  <div className="flex justify-between gap-3 py-0.5 text-sm">
-    <span className="text-slate-500">{href ? <Link href={href} className="hover:underline">{label}</Link> : label}</span>
-    <span className="font-medium">{nilai}</span>
-  </div>
-)
+const Baris = ({ label, nilai, href }: { label: string; nilai: ReactNode; href?: string }) => {
+  const isi = (
+    <>
+      <span className="min-w-0 text-slate-500">{label}</span>
+      <span className="tabular shrink-0 whitespace-nowrap font-semibold text-slate-900">{nilai}</span>
+    </>
+  )
+  const cls = 'flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm'
+  return href
+    ? <Link href={href} className={`${cls} transition hover:bg-brand-50`}>{isi}</Link>
+    : <div className={cls}>{isi}</div>
+}
+
+function PerluTindakan({ tindakan }: { tindakan: Tindakan[] }) {
+  if (tindakan.length === 0) {
+    return (
+      <section aria-label="Perlu tindakan" className="reveal flex items-center gap-4 rounded-2xl border border-mint-100 bg-gradient-to-r from-mint-50 to-white p-5 shadow-card">
+        <span aria-hidden className="grid size-12 place-items-center rounded-2xl bg-white text-mint-600 shadow-sm"><ShieldCheck className="size-6" /></span>
+        <div><h2 className="font-bold text-slate-900">Semua beres</h2><p className="text-sm text-slate-600">Tidak ada yang perlu ditindaklanjuti saat ini.</p></div>
+      </section>
+    )
+  }
+  const teratas = tindakan[0].tingkat
+  return (
+    <section aria-label="Perlu tindakan" className={`reveal rounded-2xl border border-slate-200/80 border-l-4 bg-white p-4 shadow-card md:p-5 ${TINGKAT[teratas].aksen}`}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><ShieldAlert aria-hidden className={teratas === 'mendesak' ? 'size-5 text-red-600' : 'size-5 text-amber-600'} />Perlu tindakan</h2>
+        <Badge nada={teratas === 'mendesak' ? 'bahaya' : 'peringatan'}>{tindakan.length} hal</Badge>
+      </div>
+      <ul className="grid gap-2 md:grid-cols-2">
+        {tindakan.map((t) => (
+          <li key={t.kode}>
+            <Link href={t.tautan} className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:bg-white hover:shadow-card">
+              <span aria-hidden className={`grid size-10 shrink-0 place-items-center rounded-xl ${TINGKAT[t.tingkat].warna}`}>{TINGKAT[t.tingkat].ikon}</span>
+              <span className="flex-1 font-medium text-slate-800">{t.teks}</span>
+              <ChevronRight aria-hidden className="size-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-600" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
 
 export async function BerandaPemilik({ periode, nama }: { periode: KodePeriode; nama: string }) {
   const supabase = await createClient()
@@ -104,121 +148,119 @@ export async function BerandaPemilik({ periode, nama }: { periode: KodePeriode; 
   const porsiMember = r && r.transaksi > 0 ? Math.round((r.transaksi_member / r.transaksi) * 100) : 0
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Halo, {nama}</h1>
-          <p className="text-sm text-slate-500">Ringkasan toko · {dari === sampai ? dari : `${dari} s/d ${sampai}`} (WIB)</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-[1.7rem]">Halo, {nama}</h1>
+          <p className="mt-1 text-sm text-slate-500">Ringkasan toko · {dari === sampai ? dari : `${dari} s/d ${sampai}`} (WIB)</p>
         </div>
-        <div className="flex gap-2">
+        <nav aria-label="Periode" className="inline-flex rounded-xl border border-slate-200/80 bg-white p-1 shadow-card">
           {PERIODE.map((x) => (
-            <Link key={x.kode} href={`/?p=${x.kode}`} className={`rounded-full border px-3 py-1 text-xs ${periode === x.kode ? 'bg-sky-700 text-white' : 'bg-white hover:bg-slate-50'}`}>{x.label}</Link>
+            <Link key={x.kode} href={`/?p=${x.kode}`} aria-current={periode === x.kode ? 'true' : undefined}
+              className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${periode === x.kode ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>{x.label}</Link>
           ))}
-        </div>
+        </nav>
       </div>
 
-      <section aria-label="Perlu tindakan" className="space-y-2">
-        <h2 className="text-lg font-semibold">Perlu tindakan</h2>
-        {tindakan.length === 0 ? (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">Semua beres: tidak ada yang perlu ditindaklanjuti saat ini.</p>
-        ) : (
-          <div className="grid gap-2 md:grid-cols-2">
-            {tindakan.map((t) => (
-              <Link key={t.kode} href={t.tautan} className={`rounded-lg border p-3 text-sm hover:shadow-sm ${WARNA_TINDAKAN[t.tingkat]}`}>{t.teks} →</Link>
-            ))}
-          </div>
-        )}
-      </section>
+      <PerluTindakan tindakan={tindakan} />
 
       <Banner error={rg.error?.message} />
       {r && (
-        <section aria-label="Ringkasan penjualan" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Kpi judul="Penjualan" nilai={formatRupiah(num(r.penjualan))} ubah={labelPerubahan(perubahan(num(r.penjualan), num(r.penjualan_sebelumnya)))} />
-          <Kpi judul="Laba kotor" nilai={formatRupiah(num(r.laba_kotor))} ubah={labelPerubahan(perubahan(num(r.laba_kotor), num(r.laba_sebelumnya)))} />
-          <Kpi judul="Transaksi" nilai={String(r.transaksi)} ubah={labelPerubahan(perubahan(r.transaksi, r.transaksi_sebelumnya))} />
-          <Kpi judul="Rata-rata per transaksi" nilai={formatRupiah(num(r.rata_transaksi))} />
-          <Kpi judul="Transaksi berpelanggan" nilai={`${porsiMember}%`} />
-          <Kpi judul="Pelanggan baru" nilai={String(r.pelanggan_baru)} />
-          <Kpi judul="Kerugian stok" nilai={formatRupiah(num(r.kerugian_stok))} />
-          <Kpi judul="Laba setelah kerugian" nilai={formatRupiah(num(r.laba_kotor) - num(r.kerugian_stok))} />
+        <section aria-label="Ringkasan penjualan" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <KpiCard indeks={1} judul="Penjualan" nilai={formatRupiah(num(r.penjualan))} ikon={<Wallet className="size-5" />}
+            keterangan={<span className="inline-flex items-center gap-1.5"><Tren p={perubahan(num(r.penjualan), num(r.penjualan_sebelumnya))} /> vs periode sebelumnya</span>} />
+          <KpiCard indeks={2} judul="Laba kotor" nilai={formatRupiah(num(r.laba_kotor))} ikon={<Coins className="size-5" />} nada="sukses"
+            keterangan={<span className="inline-flex items-center gap-1.5"><Tren p={perubahan(num(r.laba_kotor), num(r.laba_sebelumnya))} /> vs periode sebelumnya</span>} />
+          <KpiCard indeks={3} judul="Transaksi" nilai={String(r.transaksi)} ikon={<Receipt className="size-5" />}
+            keterangan={<span className="inline-flex items-center gap-1.5"><Tren p={perubahan(r.transaksi, r.transaksi_sebelumnya)} /> vs periode sebelumnya</span>} />
+          <KpiCard indeks={4} judul="Rata-rata per transaksi" nilai={formatRupiah(num(r.rata_transaksi))} ikon={<Calculator className="size-5" />} />
+          <KpiCard indeks={5} judul="Transaksi berpelanggan" nilai={`${porsiMember}%`} ikon={<Users className="size-5" />} keterangan={`${r.transaksi_member} dari ${r.transaksi} transaksi`} />
+          <KpiCard indeks={6} judul="Pelanggan baru" nilai={String(r.pelanggan_baru)} ikon={<UserPlus className="size-5" />} />
+          <KpiCard indeks={7} judul="Kerugian stok" nilai={formatRupiah(num(r.kerugian_stok))} ikon={<PackageX className="size-5" />} nada="bahaya" keterangan="Rusak, kedaluwarsa, hilang" />
+          <KpiCard indeks={8} judul="Laba setelah kerugian" nilai={formatRupiah(num(r.laba_kotor) - num(r.kerugian_stok))} ikon={<PiggyBank className="size-5" />} nada={num(r.laba_kotor) - num(r.kerugian_stok) < 0 ? 'bahaya' : 'sukses'} />
         </section>
       )}
 
-      <GrafikHarian data={harian} judul={`Penjualan dan laba kotor per hari (${grafik.dari === grafik.sampai ? grafik.dari : `${grafik.dari} s/d ${grafik.sampai}`})`} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel judul="Stok dan rantai pasok" tautan={{ href: '/gudang/inventori', label: 'Inventori' }} galat={st.error?.message}>
-          {s && <>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2"><GrafikHarian data={harian} judul={`Penjualan dan laba kotor per hari (${grafik.dari === grafik.sampai ? grafik.dari : `${grafik.dari} s/d ${grafik.sampai}`})`} /></div>
+        <Panel indeks={9} judul="Stok dan rantai pasok" ikon={<Truck className="size-4" />} tautan={{ href: '/gudang/inventori', label: 'Inventori' }} galat={st.error?.message}>
+          {s && <div className="-mx-2 divide-y divide-slate-100">
             <Baris label="Nilai persediaan (layak jual)" nilai={formatRupiah(num(s.nilai_persediaan))} />
             <Baris label="Nilai stok kedaluwarsa" nilai={formatRupiah(num(s.nilai_kedaluwarsa))} href="/gudang/penyesuaian" />
             <Baris label="Produk di bawah stok minimum" nilai={`${s.produk_di_bawah_minimum} dari ${s.produk_aktif}`} href="/gudang/saran" />
             <Baris label="Produk habis (stok layak 0)" nilai={s.produk_habis} href="/gudang/inventori" />
             <Baris label="Batch hampir kedaluwarsa (≤ 14 hari)" nilai={`${s.batch_hampir_kedaluwarsa} · ${formatRupiah(num(s.nilai_hampir_kedaluwarsa))}`} href="/gudang/inventori?f=hampir" />
             <Baris label="Pesanan pembelian menunggu" nilai={`${s.po_menunggu} · ${formatRupiah(num(s.nilai_po_menunggu))}`} href="/gudang/pembelian" />
-          </>}
+          </div>}
         </Panel>
+      </div>
 
-        <Panel judul="Pelanggan" tautan={{ href: '/pelanggan/segmen', label: 'Segmentasi' }} galat={sg.error?.message}>
-          <div className="mb-2 flex flex-wrap gap-2 text-xs">
-            {SEMUA_TIER.map((t) => <span key={t} className="rounded border px-2 py-0.5">{labelTier(t)}: <b>{perTier[t]}</b></span>)}
-            {SEMUA_AKTIVITAS.map((a) => <span key={a} className="rounded border px-2 py-0.5">{labelAktivitas(a)}: <b>{perAktivitas[a]}</b></span>)}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel indeks={10} judul="Pelanggan" ikon={<Users className="size-4" />} tautan={{ href: '/pelanggan/segmen', label: 'Segmentasi' }} galat={sg.error?.message}>
+          <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+            {SEMUA_TIER.map((t) => <span key={t} className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{labelTier(t)} <b className="tabular">{perTier[t]}</b></span>)}
+            {SEMUA_AKTIVITAS.map((a) => <span key={a} className="rounded-full bg-brand-50 px-2.5 py-1 text-brand-800">{labelAktivitas(a)} <b className="tabular">{perAktivitas[a]}</b></span>)}
           </div>
-          <h3 className="mb-1 text-sm font-medium text-slate-600">Pelanggan teratas periode ini</h3>
-          {tp.error ? <Banner error={tp.error.message} /> : teratas.length === 0 ? <p className="text-sm text-slate-500">Belum ada penjualan berpelanggan pada periode ini.</p> : (
-            <ul className="divide-y text-sm">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Teratas periode ini</h3>
+          {tp.error ? <Banner error={tp.error.message} /> : teratas.length === 0 ? <p className="py-3 text-sm text-slate-500">Belum ada penjualan berpelanggan pada periode ini.</p> : (
+            <ul className="divide-y divide-slate-100">
               {teratas.map((t) => (
-                <li key={t.customer_id} className="flex items-center justify-between gap-2 py-1">
-                  <span><Link href={`/pelanggan/${t.customer_id}`} className="font-medium text-sky-700 hover:underline">{t.nama}</Link> <LencanaTier tier={t.tier} /></span>
-                  <span className="text-slate-600">{formatRupiah(num(t.belanja))} · {t.transaksi}×</span>
+                <li key={t.customer_id} className="flex items-center gap-3 py-2">
+                  <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xs font-bold text-brand-800">{inisial(t.nama)}</span>
+                  <span className="min-w-0 flex-1"><Link href={`/pelanggan/${t.customer_id}`} className="block truncate text-sm font-semibold text-slate-900 hover:text-brand-700">{t.nama}</Link><LencanaTier tier={t.tier} /></span>
+                  <span className="tabular text-right text-sm text-slate-600">{formatRupiah(num(t.belanja))}<span className="block text-xs text-slate-400">{t.transaksi}×</span></span>
                 </li>
               ))}
             </ul>
           )}
         </Panel>
+        <Panel indeks={11} className="lg:col-span-2" judul="Produk teratas berdasarkan laba kotor" ikon={<CircleDollarSign className="size-4" />} tautan={{ href: '/laporan', label: 'Laporan' }} galat={pr.error?.message}>
+          {produk.length === 0 ? <EmptyState judul="Belum ada penjualan" teks="Produk terlaba muncul setelah ada transaksi pada periode ini." /> : (
+            <Table head={['Produk', 'Terjual', 'Penjualan', 'Laba kotor']}>
+              {produk.map((p) => (
+                <tr key={p.product_id}>
+                  <td className="px-3 py-2.5 font-medium text-slate-900">{p.nama}</td><td className="tabular px-3 py-2.5">{num(p.qty_terjual)}</td>
+                  <td className="tabular px-3 py-2.5">{formatRupiah(num(p.penjualan))}</td><td className="tabular px-3 py-2.5 font-semibold text-mint-700">{formatRupiah(num(p.laba_kotor))}</td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </Panel>
       </div>
 
-      <Panel judul="Produk teratas berdasarkan laba kotor" tautan={{ href: '/laporan', label: 'Laporan' }} galat={pr.error?.message}>
-        {produk.length === 0 ? <p className="text-sm text-slate-500">Belum ada penjualan pada periode ini.</p> : (
-          <Table head={['Produk', 'Terjual', 'Penjualan', 'Laba kotor']}>
-            {produk.map((p) => (
-              <tr key={p.product_id}>
-                <td className="px-3 py-2 font-medium">{p.nama}</td><td className="px-3 py-2">{num(p.qty_terjual)}</td>
-                <td className="px-3 py-2">{formatRupiah(num(p.penjualan))}</td><td className="px-3 py-2 font-semibold text-emerald-700">{formatRupiah(num(p.laba_kotor))}</td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </Panel>
-
-      <Panel judul="Aktivitas terbaru lintas modul" galat={ak.error?.message}>
-        {aktivitas.length === 0 ? <p className="text-sm text-slate-500">Belum ada aktivitas.</p> : (
-          <ul className="divide-y text-sm">
-            {aktivitas.map((a, n) => (
-              <li key={n}>
-                <Link href={a.tautan} className="flex items-start gap-3 py-2 hover:bg-slate-50">
-                  <span aria-hidden className="w-5 text-center">{IKON[a.jenis] ?? '•'}</span>
-                  <span className="flex-1"><span className="font-medium">{a.judul}</span><span className="block text-slate-500">{a.rincian}</span></span>
-                  <span className="whitespace-nowrap text-xs text-slate-400">{waktuRelatif(a.waktu)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-
-      <section id="integritas" aria-label="Integritas data">
-        <Panel judul="Integritas data lintas modul" galat={ig.error?.message}>
-          <p className="mb-2 text-xs text-slate-500">Memeriksa bahwa poin pelanggan, total penjualan, stok, penerimaan PO, dan saran pembelian saling cocok.</p>
-          <ul className="space-y-1 text-sm">
-            {integritas.map((x) => (
-              <li key={x.kode} className={x.ok ? '' : 'rounded bg-red-50 p-2 text-red-800'}>
-                <span aria-hidden>{x.ok ? '✓' : '✗'}</span> {x.nama}
-                {!x.ok && <span className="block text-xs">{x.jumlah_masalah} masalah{x.contoh ? ` · contoh: ${x.contoh}` : ''}</span>}
-              </li>
-            ))}
-          </ul>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel indeks={12} className="lg:col-span-2" judul="Aktivitas terbaru lintas modul" ikon={<Clock className="size-4" />} galat={ak.error?.message}>
+          {aktivitas.length === 0 ? <EmptyState judul="Belum ada aktivitas" /> : (
+            <ul className="-mx-2 max-h-[30rem] divide-y divide-slate-100 overflow-y-auto pr-1">
+              {aktivitas.map((a, n) => (
+                <li key={n}>
+                  <Link href={a.tautan} className="flex items-start gap-3 rounded-lg px-2 py-2.5 transition hover:bg-brand-50/60">
+                    <span aria-hidden className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${AKTIVITAS[a.jenis]?.warna ?? 'bg-slate-100 text-slate-600'}`}>{AKTIVITAS[a.jenis]?.ikon}</span>
+                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-slate-900">{a.judul}</span><span className="block truncate text-sm text-slate-500">{a.rincian}</span></span>
+                    <span className="whitespace-nowrap pt-0.5 text-xs text-slate-400">{waktuRelatif(a.waktu)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
-      </section>
+        <section id="integritas" aria-label="Integritas data" className="scroll-mt-24">
+          <Panel indeks={13} judul="Integritas data" ikon={integritasMasalah > 0 ? <ShieldAlert className="size-4 text-red-600" /> : <ShieldCheck className="size-4" />} galat={ig.error?.message}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-xs text-slate-500">Poin, penjualan, stok, PO, dan saran saling cocok.</p>
+              <Badge nada={integritasMasalah > 0 ? 'bahaya' : 'sukses'}>{integritas.length - integritasMasalah}/{integritas.length} lolos</Badge>
+            </div>
+            <ul className="space-y-1.5 text-sm">
+              {integritas.map((x) => (
+                <li key={x.kode} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${x.ok ? 'text-slate-700' : 'bg-red-50 text-red-800'}`}>
+                  <span aria-hidden className={`mt-0.5 ${x.ok ? 'text-mint-600' : 'text-red-600'}`}>{x.ok ? '✓' : '✗'}</span>
+                  <span>{x.nama}{!x.ok && <span className="block text-xs">{x.jumlah_masalah} masalah{x.contoh ? ` · contoh: ${x.contoh}` : ''}</span>}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </section>
+      </div>
     </div>
   )
 }

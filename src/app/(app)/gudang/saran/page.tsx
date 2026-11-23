@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatTanggal } from '@/lib/format'
-import { Banner, PageHeader, Table, btnCls, btnGhostCls } from '@/components/ui'
+import { Banner, BarisKosong, PageHeader, Table, btnCls, btnGhostCls } from '@/components/ui'
 import { abaikanSaran, bukaKembaliSaran, buatPoDariSaran } from './actions'
 
 export default async function SaranPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string }> }) {
@@ -26,7 +26,7 @@ export default async function SaranPage({ searchParams }: { searchParams: Promis
       <PageHeader title="Saran Pembelian" subtitle="Produk yang stoknya sudah mencapai atau di bawah minimum. Dibuat otomatis oleh sistem." />
       <Banner error={error} ok={ok} />
       <Table head={['Produk', 'Pemasok', 'Stok saat ini', 'Minimum', 'Disarankan pesan', 'Sejak', '']}>
-        {(saran ?? []).length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">Tidak ada saran: semua stok di atas minimum.</td></tr>}
+        {(saran ?? []).length === 0 && <BarisKosong colSpan={7}>Tidak ada saran: semua stok di atas minimum.</BarisKosong>}
         {(saran ?? []).map((s) => {
           const p = s.products as unknown as { nama: string; satuan: string; min_stock: number; suppliers: { nama: string } | null }
           return (

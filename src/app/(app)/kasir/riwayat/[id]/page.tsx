@@ -2,13 +2,16 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah } from '@/lib/format'
+import { ArrowLeft, CircleCheck, History } from 'lucide-react'
 import { TombolCetak } from './cetak'
+import { Logo } from '@/components/logo'
 
 const NAMA_METODE: Record<string, string> = { tunai: 'Tunai', qris: 'QRIS', transfer: 'Transfer' }
 const waktu = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' })
 
-export default async function StrukPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StrukPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ baru?: string }> }) {
   const { id } = await params
+  const { baru } = await searchParams
   const supabase = await createClient()
   const { data: sale } = await supabase.from('sales').select('id, nomor, kasir_id, customer_id, poin, metode, total, bayar, kembalian, created_at').eq('id', id).maybeSingle()
   if (!sale) notFound()
@@ -26,41 +29,51 @@ export default async function StrukPage({ params }: { params: Promise<{ id: stri
     b.qty += i.qty
     baris.set(kunci, b)
   }
+  const tier = pelanggan ? ({ reguler: 'Reguler', silver: 'Silver', gold: 'Gold' } as Record<string, string>)[pelanggan.tier] : null
   return (
     <div className="mx-auto max-w-sm space-y-4">
-      <div className="flex items-center justify-between print:hidden">
-        <Link href="/kasir" className="text-sm text-sky-700 hover:underline">← Transaksi baru</Link>
-        <Link href="/kasir/riwayat" className="text-sm text-sky-700 hover:underline">Riwayat</Link>
+      <div className="no-print flex items-center justify-between text-sm">
+        <Link href="/kasir" className="inline-flex items-center gap-1.5 font-semibold text-brand-700 hover:underline"><ArrowLeft aria-hidden className="size-4" />Transaksi baru</Link>
+        <Link href="/kasir/riwayat" className="inline-flex items-center gap-1.5 font-semibold text-slate-600 hover:text-brand-700"><History aria-hidden className="size-4" />Riwayat</Link>
       </div>
-      <div className="space-y-3 rounded-lg border bg-white p-5 text-sm shadow-sm print:border-0 print:shadow-none">
-        <div className="text-center">
-          <div className="text-lg font-bold">Toko Asri</div>
-          <div className="text-slate-500">Frozen food</div>
+      {baru === '1' && (
+        <div className="no-print flex items-center gap-3 rounded-2xl border border-mint-100 bg-mint-50 px-4 py-3 text-mint-700 animate-fade-in">
+          <CircleCheck aria-hidden className="size-5 shrink-0" />
+          <div className="text-sm"><b>Transaksi #{sale.nomor} tercatat.</b> Struk siap dicetak.</div>
         </div>
-        <div className="border-y border-dashed py-2 text-slate-600">
-          <div>No. #{sale.nomor}</div>
-          <div>{waktu.format(new Date(sale.created_at))} WIB</div>
-          {kasir?.nama && <div>Kasir: {kasir.nama}</div>}
-          {pelanggan && <div>Pelanggan: {pelanggan.nama} ({{ reguler: 'Reguler', silver: 'Silver', gold: 'Gold' }[pelanggan.tier as 'reguler']})</div>}
+      )}
+
+      <article className="struk relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 text-sm shadow-pop print:p-0">
+        <div className="mb-4 flex justify-center print:mb-2"><Logo ukuran={36} /></div>
+        <div className="space-y-0.5 border-y border-dashed border-slate-300 py-3 text-slate-600">
+          <div className="flex justify-between"><span>No.</span><span className="tabular font-semibold text-slate-900">#{sale.nomor}</span></div>
+          <div className="flex justify-between"><span>Waktu</span><span>{waktu.format(new Date(sale.created_at))} WIB</span></div>
+          {kasir?.nama && <div className="flex justify-between"><span>Kasir</span><span>{kasir.nama}</span></div>}
+          {pelanggan && <div className="flex justify-between"><span>Pelanggan</span><span className="text-right">{pelanggan.nama} ({tier})</span></div>}
         </div>
-        <table className="w-full">
+        <table className="my-3 w-full">
           <tbody>
             {[...baris.values()].map((b, n) => (
-              <tr key={n}><td className="py-1">{b.nama}<div className="text-xs text-slate-500">{b.qty} × {formatRupiah(b.harga)}</div></td><td className="py-1 text-right align-top">{formatRupiah(b.qty * b.harga)}</td></tr>
+              <tr key={n} className="align-top">
+                <td className="py-1.5 pr-3"><div className="font-medium text-slate-900">{b.nama}</div><div className="tabular text-xs text-slate-500">{b.qty} × {formatRupiah(b.harga)}</div></td>
+                <td className="tabular py-1.5 text-right font-medium text-slate-900">{formatRupiah(b.qty * b.harga)}</td>
+              </tr>
             ))}
           </tbody>
         </table>
-        <div className="space-y-1 border-t border-dashed pt-2">
-          <div className="flex justify-between font-bold"><span>Total</span><span>{formatRupiah(Number(sale.total))}</span></div>
-          <div className="flex justify-between"><span>{NAMA_METODE[sale.metode]}</span><span>{formatRupiah(Number(sale.bayar))}</span></div>
-          <div className="flex justify-between"><span>Kembalian</span><span>{formatRupiah(Number(sale.kembalian))}</span></div>
-          {pelanggan && (<>
-            <div className="flex justify-between border-t border-dashed pt-1"><span>Poin didapat</span><span>+{sale.poin}</span></div>
-            <div className="flex justify-between"><span>Total poin saat ini</span><span>{pelanggan.poin}</span></div>
-          </>)}
+        <div className="space-y-1 border-t border-dashed border-slate-300 pt-3">
+          <div className="flex items-baseline justify-between text-base font-extrabold text-slate-900"><span>Total</span><span className="tabular">{formatRupiah(Number(sale.total))}</span></div>
+          <div className="flex justify-between text-slate-600"><span>{NAMA_METODE[sale.metode]}</span><span className="tabular">{formatRupiah(Number(sale.bayar))}</span></div>
+          <div className="flex justify-between text-slate-600"><span>Kembalian</span><span className="tabular">{formatRupiah(Number(sale.kembalian))}</span></div>
+          {pelanggan && (
+            <div className="mt-2 space-y-1 border-t border-dashed border-slate-300 pt-2 text-slate-600">
+              <div className="flex justify-between"><span>Poin didapat</span><span className="tabular font-semibold text-mint-700 print:text-black">+{sale.poin}</span></div>
+              <div className="flex justify-between"><span>Total poin saat ini</span><span className="tabular">{pelanggan.poin}</span></div>
+            </div>
+          )}
         </div>
-        <p className="pt-2 text-center text-xs text-slate-500">Terima kasih sudah berbelanja!</p>
-      </div>
+        <p className="mt-5 text-center text-xs text-slate-500">Terima kasih sudah berbelanja!<br />Toko Asri · Fresh Quality, Frozen Convenience</p>
+      </article>
       <TombolCetak />
     </div>
   )

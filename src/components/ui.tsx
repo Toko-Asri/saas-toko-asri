@@ -152,3 +152,21 @@ export function KpiCard({
     </div>
   )
 }
+
+/* ----- Pil filter (tautan) ----- */
+export const pilCls = (aktif: boolean) =>
+  'inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ' +
+  (aktif
+    ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+    : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800')
+
+/* ----- Statistik ringkas (tanpa ikon) ----- */
+export function Stat({ judul, children, nada = 'netral' }: { judul: ReactNode; children: ReactNode; nada?: 'netral' | 'sukses' | 'peringatan' | 'bahaya' }) {
+  const warna = { netral: 'text-slate-900', sukses: 'text-mint-700', peringatan: 'text-amber-700', bahaya: 'text-red-700' }[nada]
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-pop">
+      <div className="text-sm font-medium text-slate-500">{judul}</div>
+      <div className={`tabular mt-1 text-2xl font-bold tracking-tight ${warna}`}>{children}</div>
+    </div>
+  )
+}

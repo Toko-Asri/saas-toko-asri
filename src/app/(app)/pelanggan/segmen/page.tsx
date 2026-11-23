@@ -3,10 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { formatRupiah } from '@/lib/format'
 import { labelAktivitas, labelTier, linkWhatsapp } from '@/lib/loyalty'
 import { hitungSegmen, perluDihubungi, saringSegmen, SEMUA_AKTIVITAS, SEMUA_TIER, type BarisSegmen } from '@/lib/segmen'
-import { Banner, Card, LencanaTier, PageHeader, Table } from '@/components/ui'
+import { Banner, BarisKosong, Card, LencanaTier, PageHeader, Table } from '@/components/ui'
 
 const BATAS_DAFTAR = 200
-const WARNA_SEL = (n: number) => (n === 0 ? 'text-slate-300' : 'font-semibold text-sky-800 hover:underline')
+const WARNA_SEL = (n: number) => (n === 0 ? 'text-slate-300' : 'font-semibold text-brand-800 hover:underline')
 
 export default async function SegmenPage({ searchParams }: { searchParams: Promise<{ tier?: string; aktivitas?: string }> }) {
   const { tier, aktivitas } = await searchParams
@@ -49,12 +49,12 @@ export default async function SegmenPage({ searchParams }: { searchParams: Promi
 
       <h2 className="text-lg font-semibold">Perlu dihubungi <span className="text-sm font-normal text-slate-500">(Silver/Gold yang mulai menjauh)</span></h2>
       <Table head={['Pelanggan', 'Tier', 'Aktivitas', 'Total belanja', 'Hari sejak belanja', 'Poin', '']}>
-        {hubungi.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">Tidak ada pelanggan bernilai yang berisiko hilang.</td></tr>}
+        {hubungi.length === 0 && <BarisKosong colSpan={7}>Tidak ada pelanggan bernilai yang berisiko hilang.</BarisKosong>}
         {hubungi.map((p) => {
           const wa = linkWhatsapp(p.telepon, `Halo ${p.nama}, sudah lama tidak mampir ke Toko Asri. Anda masih punya ${p.poin} poin. Kami tunggu kunjungannya ya!`)
           return (
             <tr key={p.id}>
-              <td className="px-3 py-2 font-medium"><Link href={`/pelanggan/${p.id}`} className="text-sky-700 hover:underline">{p.nama}</Link></td>
+              <td className="px-3 py-2 font-medium"><Link href={`/pelanggan/${p.id}`} className="text-brand-700 hover:underline">{p.nama}</Link></td>
               <td className="px-3 py-2"><LencanaTier tier={p.tier} /></td>
               <td className="px-3 py-2">{labelAktivitas(p.aktivitas)}</td>
               <td className="px-3 py-2">{formatRupiah(p.total_belanja)}</td>
@@ -71,10 +71,10 @@ export default async function SegmenPage({ searchParams }: { searchParams: Promi
         {terfilter && <Link href="/pelanggan/segmen" className="rounded border px-3 py-1 text-xs hover:bg-slate-50">Hapus filter</Link>}
       </div>
       <Table head={['Pelanggan', 'Tier', 'Aktivitas', 'Total belanja', 'Transaksi', 'Hari sejak belanja']}>
-        {tampil.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Tidak ada pelanggan pada segmen ini.</td></tr>}
+        {tampil.length === 0 && <BarisKosong colSpan={6}>Tidak ada pelanggan pada segmen ini.</BarisKosong>}
         {tampil.slice(0, BATAS_DAFTAR).map((p) => (
           <tr key={p.id}>
-            <td className="px-3 py-2 font-medium"><Link href={`/pelanggan/${p.id}`} className="text-sky-700 hover:underline">{p.nama}</Link></td>
+            <td className="px-3 py-2 font-medium"><Link href={`/pelanggan/${p.id}`} className="text-brand-700 hover:underline">{p.nama}</Link></td>
             <td className="px-3 py-2"><LencanaTier tier={p.tier} /></td>
             <td className="px-3 py-2">{labelAktivitas(p.aktivitas)}</td>
             <td className="px-3 py-2">{formatRupiah(p.total_belanja)}</td>

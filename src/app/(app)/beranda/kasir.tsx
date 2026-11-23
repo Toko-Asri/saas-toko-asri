@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah } from '@/lib/format'
 import { rentangPeriode } from '@/lib/periode'
-import { Banner, Card, Table, btnCls } from '@/components/ui'
+import { Banner, BarisKosong, Stat, Table, btnCls } from '@/components/ui'
 
 const waktu = new Intl.DateTimeFormat('id-ID', { timeStyle: 'short', timeZone: 'Asia/Jakarta' })
 const NAMA_METODE: Record<string, string> = { tunai: 'Tunai', qris: 'QRIS', transfer: 'Transfer' }
@@ -31,19 +31,19 @@ export async function BerandaKasir({ nama }: { nama: string }) {
       </div>
       <Banner error={error?.message} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <Card><div className="text-sm text-slate-500">Transaksi hari ini</div><div className="text-2xl font-bold">{baris.length}</div></Card>
-        <Card><div className="text-sm text-slate-500">Total penjualan hari ini</div><div className="text-2xl font-bold">{formatRupiah(total)}</div></Card>
+        <Stat judul={<>Transaksi hari ini</>}>{baris.length}</Stat>
+        <Stat judul={<>Total penjualan hari ini</>}>{formatRupiah(total)}</Stat>
       </div>
       <h2 className="text-lg font-semibold">Transaksi terakhir</h2>
       <Table head={['No.', 'Jam (WIB)', 'Metode', 'Total', '']}>
-        {baris.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">Belum ada transaksi hari ini.</td></tr>}
+        {baris.length === 0 && <BarisKosong colSpan={5}>Belum ada transaksi hari ini.</BarisKosong>}
         {baris.slice(0, 5).map((s) => (
           <tr key={s.id}>
             <td className="px-3 py-2 font-mono text-xs">#{s.nomor}</td>
             <td className="px-3 py-2">{waktu.format(new Date(s.created_at))}</td>
             <td className="px-3 py-2">{NAMA_METODE[s.metode]}</td>
             <td className="px-3 py-2 font-medium">{formatRupiah(Number(s.total))}</td>
-            <td className="px-3 py-2"><Link href={`/kasir/riwayat/${s.id}`} className="text-sky-700 hover:underline">Struk</Link></td>
+            <td className="px-3 py-2"><Link href={`/kasir/riwayat/${s.id}`} className="text-brand-700 hover:underline">Struk</Link></td>
           </tr>
         ))}
       </Table>

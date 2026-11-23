@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah, formatTanggal } from '@/lib/format'
-import { PageHeader, Table, btnCls } from '@/components/ui'
+import { Badge, BarisKosong, PageHeader, Table, btnCls } from '@/components/ui'
 import { STATUS_PO } from '@/lib/po-status'
 
 export default async function PembelianPage() {
@@ -16,7 +16,7 @@ export default async function PembelianPage() {
         <Link href="/gudang/pembelian/baru" className={btnCls}>PO baru</Link>
       </div>
       <Table head={['Tanggal', 'Pemasok', 'Jumlah item', 'Total', 'Status', '']}>
-        {(data ?? []).length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Belum ada pesanan pembelian.</td></tr>}
+        {(data ?? []).length === 0 && <BarisKosong colSpan={6}>Belum ada pesanan pembelian.</BarisKosong>}
         {(data ?? []).map((po) => {
           const items = po.purchase_order_items as { qty_pesan: number; harga_beli: number }[]
           const total = items.reduce((a, i) => a + i.qty_pesan * Number(i.harga_beli), 0)
@@ -27,8 +27,8 @@ export default async function PembelianPage() {
               <td className="px-3 py-2 font-medium">{(po.suppliers as unknown as { nama: string })?.nama}</td>
               <td className="px-3 py-2">{items.length}</td>
               <td className="px-3 py-2">{formatRupiah(total)}</td>
-              <td className="px-3 py-2"><span className={`rounded px-2 py-0.5 text-xs ${st.cls}`}>{st.teks}</span></td>
-              <td className="px-3 py-2"><Link href={`/gudang/pembelian/${po.id}`} className="text-sky-700 hover:underline">Buka</Link></td>
+              <td className="px-3 py-2"><Badge nada={st.nada}>{st.teks}</Badge></td>
+              <td className="px-3 py-2"><Link href={`/gudang/pembelian/${po.id}`} className="text-brand-700 hover:underline">Buka</Link></td>
             </tr>
           )
         })}
