@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { expiryStatus, hariIniJakarta } from '@/lib/expiry'
 import { formatRupiah, formatTanggal } from '@/lib/format'
-import { Banner, PageHeader, Table, btnGhostCls, inputCls } from '@/components/ui'
+import { Badge, Banner, BarisKosong, PageHeader, Table, btnDangerCls, btnGhostCls, inputCls } from '@/components/ui'
 import { sesuaikanStok } from './actions'
 
 const waktu = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' })
@@ -32,7 +32,7 @@ export default async function PenyesuaianPage({ searchParams }: { searchParams: 
               <td className="px-3 py-2 font-mono text-xs">{b.kode_batch}</td>
               <td className="px-3 py-2">{lok?.nama}</td>
               <td className="px-3 py-2">{b.qty} {prod?.satuan}</td>
-              <td className="px-3 py-2">{formatTanggal(b.tgl_kedaluwarsa)}{kadaluarsa && <span className="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs text-red-800">Kedaluwarsa</span>}</td>
+              <td className="px-3 py-2">{formatTanggal(b.tgl_kedaluwarsa)}{kadaluarsa && <span className="ml-2"><Badge nada="bahaya">Kedaluwarsa</Badge></span>}</td>
               <td className="px-3 py-2">
                 <form action={sesuaikanStok} className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="batch_id" value={b.id} />
@@ -47,7 +47,7 @@ export default async function PenyesuaianPage({ searchParams }: { searchParams: 
                 {kadaluarsa && (
                   <form action={sesuaikanStok} className="mt-1">
                     <input type="hidden" name="batch_id" value={b.id} /><input type="hidden" name="qty_baru" value="0" /><input type="hidden" name="alasan" value="kedaluwarsa" />
-                    <button className="rounded border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-100">Buang semua ({b.qty})</button>
+                    <button className={btnDangerCls}>Buang semua ({b.qty})</button>
                   </form>
                 )}
               </td>
@@ -57,7 +57,7 @@ export default async function PenyesuaianPage({ searchParams }: { searchParams: 
       </Table>
       <h2 className="text-lg font-semibold">Riwayat penyesuaian terakhir</h2>
       <Table head={['Waktu', 'Produk', 'Batch', 'Perubahan', 'Alasan', 'Nilai', 'Catatan']}>
-        {(riwayat ?? []).length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">Belum ada penyesuaian.</td></tr>}
+        {(riwayat ?? []).length === 0 && <BarisKosong colSpan={7}>Belum ada penyesuaian.</BarisKosong>}
         {(riwayat ?? []).map((r) => (
           <tr key={r.id}>
             <td className="px-3 py-2">{waktu.format(new Date(r.created_at))}</td>

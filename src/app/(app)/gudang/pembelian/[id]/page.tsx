@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah, formatTanggal } from '@/lib/format'
-import { Banner, Card, PageHeader, Table, btnCls, btnGhostCls, inputCls } from '@/components/ui'
+import { Badge, Banner, Card, PageHeader, Table, btnCls, btnGhostCls, inputCls } from '@/components/ui'
 import { terimaBarang, ubahStatusPo } from '../actions'
 import { STATUS_PO } from '@/lib/po-status'
 
@@ -23,11 +23,11 @@ export default async function PoDetailPage({ params, searchParams }: { params: P
 
   return (
     <div className="space-y-4">
-      <Link href="/gudang/pembelian" className="text-sm text-sky-700 hover:underline">← Semua PO</Link>
+      <Link href="/gudang/pembelian" className="text-sm text-brand-700 hover:underline">← Semua PO</Link>
       <PageHeader title={`PO ${sup.nama}`} subtitle={`Dibuat ${formatTanggal(po.created_at)} · Total ${formatRupiah(total)}${sup.telepon ? ' · Telp ' + sup.telepon : ''}`} />
       <Banner error={error} ok={ok} />
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded px-2 py-0.5 text-sm ${st.cls}`}>{st.teks}</span>
+        <Badge nada={st.nada}>{st.teks}</Badge>
         {po.status === 'draft' && (
           <form action={ubahStatusPo}><input type="hidden" name="id" value={po.id} /><input type="hidden" name="status" value="dipesan" /><button className={btnCls}>Tandai sudah dipesan</button></form>
         )}

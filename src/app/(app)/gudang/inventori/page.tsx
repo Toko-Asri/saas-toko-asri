@@ -2,13 +2,13 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { expiryStatus, hariIniJakarta, type StatusKedaluwarsa } from '@/lib/expiry'
 import { formatTanggal } from '@/lib/format'
-import { Card, PageHeader, Table } from '@/components/ui'
+import { Badge, BarisKosong, PageHeader, Stat, Table, pilCls } from '@/components/ui'
 
 type Filter = 'semua' | 'hampir' | 'kedaluwarsa'
-const LENCANA: Record<StatusKedaluwarsa, { teks: string; cls: string }> = {
-  kedaluwarsa: { teks: 'Kedaluwarsa', cls: 'bg-red-100 text-red-800' },
-  hampir: { teks: 'Hampir kedaluwarsa', cls: 'bg-amber-100 text-amber-800' },
-  aman: { teks: 'Aman', cls: 'bg-emerald-100 text-emerald-800' },
+const LENCANA: Record<StatusKedaluwarsa, { teks: string; nada: 'bahaya' | 'peringatan' | 'sukses' }> = {
+  kedaluwarsa: { teks: 'Kedaluwarsa', nada: 'bahaya' },
+  hampir: { teks: 'Hampir kedaluwarsa', nada: 'peringatan' },
+  aman: { teks: 'Aman', nada: 'sukses' },
 }
 
 export default async function InventoriPage({ searchParams }: { searchParams: Promise<{ f?: string }> }) {
@@ -37,9 +37,9 @@ export default async function InventoriPage({ searchParams }: { searchParams: Pr
     <div className="space-y-4">
       <PageHeader title="Inventori" subtitle="Stok per produk dan per batch, urut kedaluwarsa terdekat (FEFO)" />
       <div className="grid gap-3 sm:grid-cols-3">
-        <Card><div className="text-sm text-slate-500">Batch aktif</div><div className="text-2xl font-bold">{semuaBatch.length}</div></Card>
-        <Card><div className="text-sm text-slate-500">Hampir kedaluwarsa (≤14 hari)</div><div className="text-2xl font-bold text-amber-700">{jumlah('hampir')}</div></Card>
-        <Card><div className="text-sm text-slate-500">Sudah kedaluwarsa</div><div className="text-2xl font-bold text-red-700">{jumlah('kedaluwarsa')}</div></Card>
+        <Stat judul={<>Batch aktif</>}>{semuaBatch.length}</Stat>
+        <Stat judul={<>Hampir kedaluwarsa (≤14 hari)</>} nada="peringatan">{jumlah('hampir')}</Stat>
+        <Stat judul={<>Sudah kedaluwarsa</>} nada="bahaya">{jumlah('kedaluwarsa')}</Stat>
       </div>
 
       <h2 className="text-lg font-semibold">Stok per produk</h2>
@@ -54,7 +54,7 @@ export default async function InventoriPage({ searchParams }: { searchParams: Pr
               <td className="px-3 py-2">{s.layak} {p.satuan}</td>
               <td className="px-3 py-2">{s.total}</td>
               <td className="px-3 py-2">{p.min_stock}</td>
-              <td className="px-3 py-2">{rendah && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Di bawah minimum</span>}</td>
+              <td className="px-3 py-2">{rendah && <Badge nada="peringatan">Di bawah minimum</Badge>}</td>
             </tr>
           )
         })}
@@ -64,13 +64,13 @@ export default async function InventoriPage({ searchParams }: { searchParams: Pr
         <h2 className="text-lg font-semibold">Batch</h2>
         {(['semua', 'hampir', 'kedaluwarsa'] as Filter[]).map((x) => (
           <Link key={x} href={x === 'semua' ? '/gudang/inventori' : `/gudang/inventori?f=${x}`}
-            className={`rounded-full border px-3 py-1 text-xs ${filter === x ? 'bg-sky-700 text-white' : 'bg-white hover:bg-slate-50'}`}>
+            className={pilCls(filter === x)}>
             {x === 'semua' ? 'Semua' : x === 'hampir' ? 'Hampir kedaluwarsa' : 'Kedaluwarsa'}
           </Link>
         ))}
       </div>
       <Table head={['Produk', 'Kode batch', 'Qty', 'Lokasi (suhu)', 'Kedaluwarsa', 'Status']}>
-        {tampil.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Tidak ada batch pada filter ini.</td></tr>}
+        {tampil.length === 0 && <BarisKosong colSpan={6}>Tidak ada batch pada filter ini.</BarisKosong>}
         {tampil.map((b) => {
           const prod = b.products as unknown as { nama: string; satuan: string } | null
           const lok = b.storage_locations as unknown as { nama: string; suhu_min: number | null; suhu_maks: number | null } | null
@@ -81,7 +81,7 @@ export default async function InventoriPage({ searchParams }: { searchParams: Pr
               <td className="px-3 py-2">{b.qty} {prod?.satuan}</td>
               <td className="px-3 py-2">{lok?.nama} ({lok?.suhu_min ?? '–'} s/d {lok?.suhu_maks ?? '–'} °C)</td>
               <td className="px-3 py-2">{formatTanggal(b.tgl_kedaluwarsa)}</td>
-              <td className="px-3 py-2"><span className={`rounded px-2 py-0.5 text-xs ${LENCANA[b.status].cls}`}>{LENCANA[b.status].teks}</span></td>
+              <td className="px-3 py-2"><Badge nada={LENCANA[b.status].nada}>{LENCANA[b.status].teks}</Badge></td>
             </tr>
           )
         })}

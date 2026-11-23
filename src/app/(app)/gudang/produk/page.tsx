@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah } from '@/lib/format'
-import { Banner, Card, Field, PageHeader, Table, btnCls, btnGhostCls, inputCls } from '@/components/ui'
+import { Badge, Banner, Card, Field, PageHeader, Table, btnCls, btnGhostCls, inputCls } from '@/components/ui'
 import { simpanProduk, ubahAktifProduk } from './actions'
 
 type SP = { edit?: string; error?: string; ok?: string }
@@ -49,7 +49,7 @@ export default async function ProdukPage({ searchParams }: { searchParams: Promi
             <td className="px-3 py-2">{formatRupiah(Number(x.harga_beli))}</td>
             <td className="px-3 py-2">{formatRupiah(Number(x.harga_jual))}</td>
             <td className="px-3 py-2">{x.min_stock} / {x.reorder_qty}</td>
-            <td className="px-3 py-2">{x.aktif ? 'Aktif' : 'Nonaktif'}</td>
+            <td className="px-3 py-2"><Badge nada={x.aktif ? 'sukses' : 'netral'}>{x.aktif ? 'Aktif' : 'Nonaktif'}</Badge></td>
             <td className="flex gap-2 px-3 py-2">
               <Link href={`/gudang/produk?edit=${x.id}`} className={btnGhostCls}>Ubah</Link>
               <form action={ubahAktifProduk}>

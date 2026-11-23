@@ -5,7 +5,7 @@ Dibangun dengan **Next.js (App Router) + TypeScript + Tailwind** dan **Supabase*
 
 Logika bisnis yang kritis (penerimaan barang, saran pembelian, checkout kasir dengan stok FEFO, poin dan tier pelanggan,
 agregasi dashboard) berada di **database** (fungsi RPC dan trigger Postgres), sehingga data antar-modul selalu konsisten.
-Panduan demo 10–12 menit: [`docs/DEMO.md`](docs/DEMO.md).
+Panduan demo 10–12 menit: [`docs/DEMO.md`](docs/DEMO.md). Panduan desain UI (token, komponen, aturan gerak, aksesibilitas): [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status pengerjaan
 
@@ -402,6 +402,7 @@ PGDATABASE=asri_test supabase/tests/crm_concurrency.sh   # uji konkurensi poin p
 supabase/migrations/   skema, RLS, trigger, fungsi RPC
 supabase/seed.sql      data contoh
 supabase/tests/        uji SQL + runner
+src/components/        design system (ui.tsx), kerangka sidebar/header, grafik, skeleton
 src/lib/               peran, format, kedaluwarsa, keranjang, loyalitas, dashboard, klien Supabase
 src/app/(app)/         beranda per peran, kasir, pelanggan, gudang (SCM), laporan
 docs/DEMO.md           skrip demo terpandu

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatRupiah, formatTanggal } from '@/lib/format'
 import { bersihkanPencarian, polaTelepon } from '@/lib/pelanggan'
-import { Banner, Card, Field, LencanaTier, PageHeader, Table, btnCls, btnGhostCls, inputCls } from '@/components/ui'
+import { Banner, BarisKosong, Card, Field, LencanaTier, PageHeader, Table, btnCls, btnGhostCls, inputCls, pilCls } from '@/components/ui'
 import { simpanPelanggan, ubahAktifPelanggan } from './actions'
 
 type SP = { q?: string; tier?: string; edit?: string; error?: string; ok?: string }
@@ -56,15 +56,15 @@ export default async function PelangganPage({ searchParams }: { searchParams: Pr
       <div className="flex gap-2">
         {[undefined, ...TIERS].map((t) => (
           <Link key={t ?? 'semua'} href={urlTier(t)}
-            className={`rounded-full border px-3 py-1 text-xs ${filterTier === t ? 'bg-sky-700 text-white' : 'bg-white hover:bg-slate-50'}`}>{t ? t[0].toUpperCase() + t.slice(1) : 'Semua tier'}</Link>
+            className={pilCls(filterTier === t)}>{t ? t[0].toUpperCase() + t.slice(1) : 'Semua tier'}</Link>
         ))}
       </div>
 
       <Table head={['Nama', 'Telepon', 'Tier', 'Poin', 'Total belanja', 'Transaksi', 'Belanja terakhir', '']}>
-        {(daftar ?? []).length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Tidak ada pelanggan yang cocok.</td></tr>}
+        {(daftar ?? []).length === 0 && <BarisKosong colSpan={8}>Tidak ada pelanggan yang cocok.</BarisKosong>}
         {(daftar ?? []).map((c) => (
           <tr key={c.id} className={c.aktif ? '' : 'text-slate-400'}>
-            <td className="px-3 py-2 font-medium"><Link href={`/pelanggan/${c.id}`} className="text-sky-700 hover:underline">{c.nama}</Link>{!c.aktif && <span className="ml-2 text-xs">(nonaktif)</span>}</td>
+            <td className="px-3 py-2 font-medium"><Link href={`/pelanggan/${c.id}`} className="text-brand-700 hover:underline">{c.nama}</Link>{!c.aktif && <span className="ml-2 text-xs">(nonaktif)</span>}</td>
             <td className="px-3 py-2">{c.telepon ?? '–'}</td>
             <td className="px-3 py-2"><LencanaTier tier={c.tier} /></td>
             <td className="px-3 py-2">{c.poin}</td>

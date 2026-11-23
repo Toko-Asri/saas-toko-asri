@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { Banner, Card, Field, PageHeader, Table, btnCls, btnGhostCls, inputCls } from '@/components/ui'
+import { Badge, Banner, Card, Field, PageHeader, Table, btnCls, btnGhostCls, inputCls } from '@/components/ui'
 import { simpanPemasok, ubahAktifPemasok } from './actions'
 import Link from 'next/link'
 
@@ -33,7 +33,7 @@ export default async function PemasokPage({ searchParams }: { searchParams: Prom
             <td className="px-3 py-2 font-medium">{s.nama}</td>
             <td className="px-3 py-2">{s.kontak}</td>
             <td className="px-3 py-2">{s.telepon}</td>
-            <td className="px-3 py-2">{s.aktif ? 'Aktif' : 'Nonaktif'}</td>
+            <td className="px-3 py-2"><Badge nada={s.aktif ? 'sukses' : 'netral'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge></td>
             <td className="flex gap-2 px-3 py-2">
               <Link href={`/gudang/pemasok?edit=${s.id}`} className={btnGhostCls}>Ubah</Link>
               <form action={ubahAktifPemasok}>
